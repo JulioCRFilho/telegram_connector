@@ -233,6 +233,18 @@ function purgeStale() {
 }
 
 // Builds the `cline connect telegram` argv from the current key/model indices.
+// Each instance gets its OWN RPC hub port via --rpc-address. The default hub
+// (127.0.0.1:25463) keys per-thread locks by the *user's* chat id
+// ("telegram:<userId>"), which is identical across all bot instances sharing
+// that user — so a turn on one bot held the hub lock and the other bots'
+// messages were DROPPED with LOCK_FAILED (no retry, no reply). Separate hubs
+// per instance isolate those locks so all agents can talk at once.
+const RPC_HUB_PORTS = { MANAGER: 25463, FSCENE: 25464, EVOL: 25465 };
+const rpcPort =
+  parseInt(process.env[`TELEGRAM_RPC_PORT_${PROJECT_ARG}`] || '', 10) ||
+  RPC_HUB_PORTS[PROJECT_ARG] ||
+  25463;
+
 function buildArgs(index, modelIndex) {
   const args = [
     'connect', 'telegram',
@@ -240,6 +252,7 @@ function buildArgs(index, modelIndex) {
     // its errors land in cline's log files we tail
     '-k', TELEGRAM_BOT_TOKEN,
     '--api-key', API_KEYS[index],
+    '--rpc-address', `127.0.0.1:${rpcPort}`,
   ];
   // Always pass --model explicitly: never let cline fall back to its own
   // default, so the key×model cooldown grid matches what actually runs.
@@ -380,6 +393,10 @@ function scheduleRestart(index, modelIndex, delay = RESTART_DELAY_MS) {
   });
 }
 
+// Set by the rotation/crash restart paths so the next start skips the startup
+// resume notice — those paths already notify the user themselves.
+let restartFromRotation = false;
+
 function startCline(index, modelIndex) {
   curKeyIndex = index;
   curModelIndex = modelIndex;
@@ -388,11 +405,45 @@ function startCline(index, modelIndex) {
   log(`[Rotator] Starting connector (key #${index}, model #${modelIndex})`);
   log(`[Rotator] pid=${process.pid} running: cline ${args.join(' ')}`);
 
+  // Per-instance hub isolation (see RPC_HUB_PORTS above): --rpc-address alone
+  // is NOT enough — hub discovery uses the GLOBAL record
+  // ~/.cline/data/locks/hub/production.json, so every connector finds and
+  // joins the same shared hub and the per-thread locks (keyed by the user's
+  // chat id) collide across bots. Each instance therefore gets its own
+  // CLINE_HUB_PORT AND its own CLINE_HUB_DISCOVERY_PATH, so its hub daemon
+  // binds a private port and publishes a private discovery record.
+  const hubDiscoveryPath = path.join(
+    os.homedir(), '.cline', 'data', 'locks', 'hub', `${PROJECT_ARG || 'DEFAULT'}.json`
+  );
+  const childEnv = {
+    ...process.env,
+    CLINE_HUB_HOST: '127.0.0.1',
+    CLINE_HUB_PORT: String(rpcPort),
+    CLINE_HUB_DISCOVERY_PATH: hubDiscoveryPath,
+  };
+
   // stdin is a pipe we keep open (never write/end it): a headless run inherits
   // /dev/null for stdin, and an immediate EOF there can make the foreground
   // connector quit right after starting.
-  clineProcess = spawn('cline', args, { stdio: ['pipe', 'pipe', 'pipe'] });
+  clineProcess = spawn('cline', args, { stdio: ['pipe', 'pipe', 'pipe'], env: childEnv });
   currentClinePid = clineProcess.pid;
+
+  // Startup feedback: on a (re)start that wasn't a key rotation, scan the
+  // task list for incomplete work and tell the user what's pending. The
+  // connector agent keeps its session and task list in the workspace, so it
+  // picks those items up from there when the conversation continues.
+  if (restartFromRotation) {
+    restartFromRotation = false;
+  } else {
+    const progress = getTaskProgress();
+    if (progress && progress.pending && progress.pending.length > 0) {
+      const items = progress.pending.slice(0, 3).map((t) => `• ${t}`).join('\n');
+      const more = progress.pending.length > 3 ? `\n…and ${progress.pending.length - 3} more` : '';
+      notifyUser(
+        `🔄 Agent is back online — 📋 ${progress.done}/${progress.total} tasks completed. Picking up pending work:\n${items}${more}`
+      );
+    }
+  }
 
   clineProcess.on('error', (err) => {
     log(`[Rotator] Failed to start cline: ${err.message}`);
@@ -448,6 +499,14 @@ function startCline(index, modelIndex) {
     } else {
       log(`[Rotator] Restarting with key #${next.key}, model #${next.model} (${MODELS[next.model]}) in ${delay}ms...`);
     }
+    // Surface the crash restart to the user too (same as rate-limit rotations).
+    restartFromRotation = true;
+    const progress = getTaskProgress();
+    notifyUser(
+      `🔁 Connector exited unexpectedly — restarting with key #${next.key} / model ${MODELS[next.model]}.`
+      + (progress ? ` 📋 ${progress.done}/${progress.total} tasks completed.` : '')
+      + ' Pending work resumes automatically.'
+    );
     scheduleRestart(next.key, next.model, next.waitMs > 0 ? next.waitMs : delay);
   });
 }
@@ -522,6 +581,20 @@ function onLimitSignal(line) {
     log(`[Rotator] All ${API_KEYS.length}×${MODELS.length} combos on cooldown. Waiting ${Math.round(next.waitMs / 60000)}m before retrying.`);
   }
   log(`[Rotator] Rotating to key #${next.key}, model #${next.model} (${MODELS[next.model]})`);
+
+  // Tell the user the rotation happened (requirement: rotations are surfaced
+  // in the chat, with task progress so they know work continues).
+  restartFromRotation = true;
+  const progress = getTaskProgress();
+  const waitTxt = next.waitMs > 0
+    ? ` All combos are cooling down; next attempt ~${new Date(Date.now() + next.waitMs).toISOString().slice(11, 16)} UTC.`
+    : '';
+  notifyUser(
+    `🔁 Rate limit hit — rotating to key #${next.key} / model ${MODELS[next.model]}.${waitTxt}`
+    + (progress ? ` 📋 ${progress.done}/${progress.total} tasks completed.` : '')
+    + ' Pending work resumes automatically.'
+  );
+
   scheduleRestart(next.key, next.model, next.waitMs > 0 ? next.waitMs : RESTART_DELAY_MS);
 }
 
@@ -533,8 +606,15 @@ function onLimitSignal(line) {
 // that's the list the connector is actively working through.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const TASKS_FILE = process.env.TELEGRAM_TASKS_FILE || '';
-const TASKS_DIR = process.env.TELEGRAM_TASKS_DIR || process.cwd();
+const TASKS_FILE = process.env[`TELEGRAM_TASKS_FILE_${PROJECT_ARG}`] || process.env.TELEGRAM_TASKS_FILE || '';
+// Each agent's task list lives in ITS OWN workspace, so the scanned directory
+// is per-instance: TELEGRAM_TASKS_DIR_<NAME> wins, then TELEGRAM_TASKS_DIR,
+// then the agent's known workspace, then the wrapper's cwd.
+const TASKS_DIR_DEFAULTS = {
+  FSCENE: path.join(os.homedir(), 'Projects', 'fscene', 'flutter_scene'),
+  EVOL: path.join(os.homedir(), 'Projects', 'com.appfy.evol'),
+};
+const TASKS_DIR = process.env[`TELEGRAM_TASKS_DIR_${PROJECT_ARG}`] || process.env.TELEGRAM_TASKS_DIR || TASKS_DIR_DEFAULTS[PROJECT_ARG] || process.cwd();
 
 // Counts `- [ ]` / `- [x]` markdown checkboxes in a file; null when it has none.
 function countCheckboxes(file) {
@@ -545,11 +625,13 @@ function countCheckboxes(file) {
     return null;
   }
   let done = 0, total = 0;
-  for (const m of text.matchAll(/^[ \t]*[-*] \[( |x|X)\]/gm)) {
+  const pending = [];
+  for (const m of text.matchAll(/^[ \t]*[-*] \[( |x|X)\][ \t]*(.*)$/gm)) {
     total++;
     if (m[1] !== ' ') done++;
+    else pending.push(m[2].trim());
   }
-  return total > 0 ? { done, total } : null;
+  return total > 0 ? { done, total, pending } : null;
 }
 
 // Recursively collects markdown files under dir, skipping heavy/irrelevant
@@ -588,12 +670,12 @@ function getTaskProgress() {
   return best;
 }
 
-// Formats "\n📋 Tasks progress: 4/8 (50%)" — empty string when nothing to report.
+// Formats "\n📋 4/8 tasks completed (50%)" — empty string when nothing to report.
 function taskProgressText() {
   const p = getTaskProgress();
   if (!p) return '';
   const pct = Math.round((p.done / p.total) * 100);
-  return `\n📋 Tasks progress: ${p.done}/${p.total} (${pct}%)`;
+  return `\n📋 ${p.done}/${p.total} tasks completed (${pct}%)`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -628,6 +710,19 @@ async function sendTelegramMessage(chatId, text) {
     log(`[Telegram] sendMessage error: ${err.message}`);
     return false;
   }
+}
+
+// Chat id for wrapper-initiated notices: the allowed user (DM chat id equals
+// the user id), else the last chat seen in the connector logs.
+function noticeChatId() {
+  return ALLOWED_USER_ID || lastSeenChatId || null;
+}
+
+// Best-effort notice to the user; never throws or blocks the rotation path.
+function notifyUser(text) {
+  const chatId = noticeChatId();
+  if (!chatId || shuttingDown) return;
+  sendTelegramMessage(chatId, text);
 }
 
 // Last chat id seen in any telegram-connect log line; fallback when a line
@@ -668,11 +763,15 @@ function startTurn(chatId) {
     sendTelegramMessage(activeTurn.chatId, `${TURN_PING_TEXT(mins)}${taskProgressText()}`);
   }, TURN_PING_INTERVAL_MS);
 
-  // If every key/model combo is parked on quota, say so instead of a generic ack.
+  // Ack leads with the task list progress when there is one to report; if
+  // every key/model combo is parked on quota, say that instead.
   const allBlocked = nextCombo() === null;
+  const progress = getTaskProgress();
   const text = allBlocked
     ? `⛔ All API keys/models are on cooldown right now (until ${new Date(earliestUnblock()).toISOString().slice(11, 16)} UTC). Your message is queued — I'll answer when quota resets.`
-    : TURN_ACK_TEXT;
+    : progress
+      ? `🛠️ On it — 📋 ${progress.done}/${progress.total} tasks completed. You'll get the answer here when it's done.`
+      : TURN_ACK_TEXT;
 
   const now = Date.now();
   if (now - lastAckAt < TURN_ACK_THROTTLE_MS) return;   // burst guard
