@@ -4,7 +4,7 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "open connector",
+            "label": "open manager",
             "type": "shell",
             "command": "node main.js MANAGER",
             "problemMatcher": [],
