@@ -1,3 +1,4 @@
 agents.pids.json
 agents.state-*.json
-connector.log
+*.log
+*.out
