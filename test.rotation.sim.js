@@ -1,0 +1,89 @@
+// Simulation of the full rotation loop: "rotate → probe key/model → reject →
+// rotate again" (the requirement), driving the REAL main.js code with a mocked
+// provider endpoint so no real connector is launched.
+// Run:  node test.rotation.sim.js
+process.env.TELEGRAM_BOT_TOKEN = '123456789:TEST';
+const TEST_PROJECT = process.argv[2] || 'SIMSIM';
+if (!process.argv[2]) process.argv.push(TEST_PROJECT);
+process.env[`TELEGRAM_BOT_TOKEN_${TEST_PROJECT}`] = '123456789:TEST';
+process.env.TELEGRAM_API_KEYS = 'sk-or-v1-aaa, sk-or-v1-bbb';
+process.env.TELEGRAM_AVAILABLE_MODELS = 'openrouter/auto, deepseek/deepseek-chat';
+process.env.TELEGRAM_RESTART_DELAY_MS = '50';
+process.env.TELEGRAM_TASKS_DIR = require('os').tmpdir();
+process.env.TELEGRAM_ALLOWED_USER_ID = '123456789'; // so notifyUser actually emits + logs
+process.env.PATH = '';                    // any spawn attempt fails harmlessly (ENOENT)
+
+const m = require('./main.js');
+
+// Capture the wrapper's own logging so we can assert on the rotation sequence.
+const outLines = [];
+const origLog = console.log;
+console.log = (...a) => { outLines.push(a.join(' ')); };
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const err = (code, message) => ({
+  status: code,
+  headers: { get: () => null },
+  json: async () => ({ error: { code, message } }),
+});
+// A "passing" provider returns a minimal chat completion payload.
+const pass = () => ({
+  status: 200,
+  headers: { get: () => null },
+  json: async () => ({ choices: [{ index: 0 }], model: 'mock' }),
+});
+
+let passCount = 0, failCount = 0;
+function t(cond, name) {
+  if (cond) { passCount++; process.stdout.write(`  ok - ${name}\n`); }
+  else { failCount++; process.stdout.write(`  FAIL - ${name}\n`); }
+}
+// Restore console BEFORE printing results here.
+function restoreLog() { if (console.log !== origLog) console.log = origLog; }
+
+(async () => {
+  // ── Scenario 1: every combo rejected → all block, then park ─────────────
+  global.fetch = async () => err(429, 'Error 429: Daily free limit reached on model x. Try again in 21h 2m');
+  await m.startVerified(0, 0);
+  await sleep(700);                       // let the 2×2 grid sweep through all 4 combos
+
+  const logS1 = outLines.join('\n');
+  t(m.blockedCombos.size === 4, 'all 4 key×model combos got blocked by probe failures');
+  t(/All 2×2 combos unavailable/.test(logS1), 'full-cooldown park engaged');
+  t(/Try again in 21h 2m/.test(logS1) || /21h/.test(logS1), 'quoted 21h cooldown surfaced in the block log');
+  const startsS1 = (logS1.match(/Starting connector/g) || []).length;
+  t(startsS1 === 0, 'no connector ever started — every combo was tested and rejected');
+
+  // ── Scenario 2: key #0 always rejected, key #1 always OK ─────────────────
+  // Reset rotation state left parked by scenario 1's 21h full-cooldown wait.
+  m._test.setRestarting(false);
+  m._test.setStartPending(false);
+  m._test.setLastProbeNoticeAt(0);
+  m.blockedCombos.clear();
+  outLines.length = 0;
+  const started = [];                     // which combos were actually launched
+  m._test.setStartOverride((i, mi) => { started.push([i, mi]); });
+  global.fetch = async (url, opts) => {
+    const auth = String(opts.headers.Authorization || '');
+    return auth.startsWith('Bearer sk-or-v1-aaa') ? err(401, 'Invalid API key') : pass();
+  };
+  await m.startVerified(0, 0);
+  await sleep(200);                       // probe → reject → re-probe → pass
+
+  const logS2 = outLines.join('\n');
+  t(m.blockedCombos.size === 1, `only the rejected combo (key 0 × model 0) was blocked [size=${m.blockedCombos.size}, keys=${[...m.blockedCombos.keys()].join(',')}]`);
+  t(m.blockedCombos.has('0:0'), 'blocked combos contains "0:0"');
+  t(/Blocked key #0 \+ model #0/.test(logS2), 'rejection was logged as a probe block');
+  t(/Rotating to key #1, model #0/.test(logS2), 'wrapper rotated again → key #1 / model #0');
+  t(JSON.stringify(started) === JSON.stringify([[1, 0]]), `only the PASSING combo (1,0) started — never the rejected one (got ${JSON.stringify(started)})`);
+  t(/Preflight check rejected key #0/.test(logS2), 'user-facing rejection notice was queued');
+
+  restoreLog();
+  const line = `${passCount} passed, ${failCount} failed`;
+  console.log(`\n${'.'.repeat(line.length)}\n${line}\n${'.'.repeat(line.length)}`);
+  process.exit(failCount ? 1 : 0);
+})().catch((e) => {
+  restoreLog();
+  console.error('sim crashed:', e);
+  process.exit(1);
+});
