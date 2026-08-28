@@ -15,6 +15,19 @@
             "options": {
                 "cwd": "${workspaceFolder}",
             }
+        },
+        {
+            "label": "kill cline connect",
+            "type": "shell",
+            "command": "pkill -f \"cline connect\" || true",
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "options": {
+                "cwd": "${workspaceFolder}",
+            }
         }
     ]
 }
