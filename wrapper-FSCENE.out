@@ -1,0 +1,14 @@
+[2026-08-28T23:07:43.704Z] [Rotator] Stale connectors purged; starting in 2000ms...
+[2026-08-28T23:07:45.710Z] [Probe] Pre-flight probe disabled; starting connector without a probe.
+[2026-08-28T23:07:45.712Z] [Rotator] Starting connector (key #0, model #0)
+[2026-08-28T23:07:45.712Z] [Rotator] pid=8432 running: cline connect telegram -i -k 8700429950:AAGJtbNIzq-glV2Ft-k81_4HOMPmR_dK8yU --api-key sk_57e70fdfcc744a3abdde03eecea1b9495a193ffbd14883c2a8a6757cba9f6dfe --rpc-address 127.0.0.1:25464 --model z-ai/glm-5.3-flash --allowed-user-id 8844466799
+[2026-08-28T23:07:45.742Z] [Telegram] → chat 8844466799: 🔄 Agent is back online — 📋 5/8 tasks completed. Picking up pending work: | • **5. Batch keying/interpolation commands.** `_ensureEdgeKeys` runs up to | • **6. `previewDuration` decodes all channel timelines every tick** in | • **7. Tighten `hitKey` row scoping.** The 12px radius exceeds half a row
+[2026-08-28T23:07:48.250Z] [child stdout] [telegram-connect] Telegram connector ready {
+[2026-08-28T23:07:48.251Z] [child stdout] rpcAddress: "ws://127.0.0.1:25464/hub",
+[2026-08-28T23:07:48.251Z] [child stdout] mode: "polling",
+[2026-08-28T23:07:48.251Z] [child stdout] }
+[2026-08-28T23:07:48.252Z] [child stdout] [telegram] connected as @TodCode_bot mode=polling rpc=ws://127.0.0.1:25464/hub provider=cline model=z-ai/glm-5.3-flash tools=on
+[2026-08-28T23:07:48.252Z] [child stdout] [telegram] send /clear in a chat to start a fresh RPC session
+[2026-08-28T23:07:48.252Z] [child stdout] [telegram] send /whereami in a chat to get its delivery thread id
+[2026-08-28T23:07:48.252Z] [child stdout] [telegram] use /tools, /yolo, or /cwd <path> to update runtime settings
+[2026-08-28T23:07:48.252Z] [child stdout] [telegram] send /exit in a chat or press Ctrl+C to stop
