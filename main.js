@@ -80,7 +80,15 @@ if (require.main === module) {
   // never a random slot.
   const boot = rotation.recommendCombo();
   log(`[Rotator] Boot consulted cooldown grid → key #${boot.key}, model #${boot.model}${boot.waitMs > 0 ? ` (still cooling; earliest free in ${Math.round(boot.waitMs / 60000)}m)` : ''}.`);
-  setTimeout(() => supervisor.startVerified(boot.key, boot.model), config.RESTART_DELAY_MS);
+  if (boot.waitMs > 0) {
+    // Every combo is on cooldown — don't probe (the probe would pass because
+    // the connector can connect to Telegram, but the combo can't make API
+    // calls). Instead, park on the earliest-free combo and wait.
+    log(`[Rotator] All combos cooling; parking until cooldown expires.`);
+    supervisor.scheduleRestart(boot.key, boot.model, boot.waitMs, true);
+  } else {
+    setTimeout(() => supervisor.startVerified(boot.key, boot.model), config.RESTART_DELAY_MS);
+  }
 }
 
 // Test hook: when main.js is required as a module (never executed directly) the

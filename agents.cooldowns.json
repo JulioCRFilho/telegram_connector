@@ -1,1 +1,47 @@
-{}
+{
+  "0:0": {
+    "unblockAt": 1788040871682,
+    "blockedAt": 1788032367670,
+    "cooldownMs": 8460000,
+    "reason": "limit signal (model-scoped)",
+    "detail": "{\"level\":50,\"time\":\"2026-08-29T20:09:10.695Z\",\"pid\":58249,\"hostname\":\"Julios-MacBook-Pro.local\",\"name\":\"cline.cli\",\"component\":\"telegram-connect\",\"transport\":\"telegram\",\"threadId\":\"telegram:8844466799\",\"sessionId\":\"1788034148897_xyalv\",\"err\":{\"type\":\"Error\",\"message\":\"{\\\"error\\\":{\\\"code\\\":\\\"INFERENC"
+  },
+  "1:0": {
+    "unblockAt": 1788040871682,
+    "blockedAt": 1788034151682,
+    "cooldownMs": 6720000,
+    "reason": "limit signal (model-scoped)",
+    "detail": "{\"level\":50,\"time\":\"2026-08-29T20:09:10.695Z\",\"pid\":58249,\"hostname\":\"Julios-MacBook-Pro.local\",\"name\":\"cline.cli\",\"component\":\"telegram-connect\",\"transport\":\"telegram\",\"threadId\":\"telegram:8844466799\",\"sessionId\":\"1788034148897_xyalv\",\"err\":{\"type\":\"Error\",\"message\":\"{\\\"error\\\":{\\\"code\\\":\\\"INFERENC"
+  },
+  "2:0": {
+    "unblockAt": 1788040871682,
+    "blockedAt": 1788034151682,
+    "cooldownMs": 6720000,
+    "reason": "limit signal (model-scoped)",
+    "detail": "{\"level\":50,\"time\":\"2026-08-29T20:09:10.695Z\",\"pid\":58249,\"hostname\":\"Julios-MacBook-Pro.local\",\"name\":\"cline.cli\",\"component\":\"telegram-connect\",\"transport\":\"telegram\",\"threadId\":\"telegram:8844466799\",\"sessionId\":\"1788034148897_xyalv\",\"err\":{\"type\":\"Error\",\"message\":\"{\\\"error\\\":{\\\"code\\\":\\\"INFERENC"
+  },
+  "3:0": {
+    "unblockAt": 1788040871682,
+    "blockedAt": 1788034151682,
+    "cooldownMs": 6720000,
+    "reason": "limit signal (model-scoped)",
+    "detail": "{\"level\":50,\"time\":\"2026-08-29T20:09:10.695Z\",\"pid\":58249,\"hostname\":\"Julios-MacBook-Pro.local\",\"name\":\"cline.cli\",\"component\":\"telegram-connect\",\"transport\":\"telegram\",\"threadId\":\"telegram:8844466799\",\"sessionId\":\"1788034148897_xyalv\",\"err\":{\"type\":\"Error\",\"message\":\"{\\\"error\\\":{\\\"code\\\":\\\"INFERENC"
+  },
+  "4:0": {
+    "unblockAt": 1788040871682,
+    "blockedAt": 1788034151682,
+    "cooldownMs": 6720000,
+    "reason": "limit signal (model-scoped)",
+    "detail": "{\"level\":50,\"time\":\"2026-08-29T20:09:10.695Z\",\"pid\":58249,\"hostname\":\"Julios-MacBook-Pro.local\",\"name\":\"cline.cli\",\"component\":\"telegram-connect\",\"transport\":\"telegram\",\"threadId\":\"telegram:8844466799\",\"sessionId\":\"1788034148897_xyalv\",\"err\":{\"type\":\"Error\",\"message\":\"{\\\"error\\\":{\\\"code\\\":\\\"INFERENC"
+  },
+  "5:0": {
+    "unblockAt": 1788040871682,
+    "blockedAt": 1788034151682,
+    "cooldownMs": 6720000,
+    "reason": "limit signal (model-scoped)",
+    "detail": "{\"level\":50,\"time\":\"2026-08-29T20:09:10.695Z\",\"pid\":58249,\"hostname\":\"Julios-MacBook-Pro.local\",\"name\":\"cline.cli\",\"component\":\"telegram-connect\",\"transport\":\"telegram\",\"threadId\":\"telegram:8844466799\",\"sessionId\":\"1788034148897_xyalv\",\"err\":{\"type\":\"Error\",\"message\":\"{\\\"error\\\":{\\\"code\\\":\\\"INFERENC"
+  },
+  "_models_": [
+    0
+  ]
+}
