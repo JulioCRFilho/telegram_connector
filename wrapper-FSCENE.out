@@ -40,3 +40,30 @@
 [2026-08-29T01:08:12.909Z] [child stdout] [telegram] send /whereami in a chat to get its delivery thread id
 [2026-08-29T01:08:12.909Z] [child stdout] [telegram] use /tools, /yolo, or /cwd <path> to update runtime settings
 [2026-08-29T01:08:12.909Z] [child stdout] [telegram] send /exit in a chat or press Ctrl+C to stop
+[2026-08-29T14:35:00.074Z] [Rotator] Stale connectors purged; starting in 2000ms...
+[2026-08-29T14:35:04.143Z] [Probe] key #1 + model #3 (poolside/laguna-s2.1:free) — ok (2062ms).
+[2026-08-29T14:35:04.144Z] [Rotator] Starting connector (key #1, model #3)
+[2026-08-29T14:35:04.144Z] [Rotator] pid=29129 running: cline connect telegram -i -k 8700429950:AAGJtbNIzq-glV2Ft-k81_4HOMPmR_dK8yU --api-key sk_3c2c5305e23e0debcb05afbd564bfae85ecab40e3a15cc0a658de696dfe5cb3c --rpc-address 127.0.0.1:25464 --model poolside/laguna-s2.1:free --allowed-user-id 8844466799 --system This is a Telegram-Cline connector. Your job is to manage all other bots listed below:
+
+- EVOL
+- FSCENE
+
+Make sure they're online, responsible, rotating keys and models and such.
+
+Whenever you work on a requested feature/fix, you must ask confirmation for resetting all of them (including yourself) to use the updated code.
+
+Keep track of their PID for future references.
+
+Use short answers until asked for explanations.
+
+Make short resumes to explain what you did.
+[2026-08-29T14:35:04.162Z] [Telegram] → chat 8844466799: 🔄 Agent is back online — 📋 5/8 tasks completed. Picking up pending work: | • **5. Batch keying/interpolation commands.** `_ensureEdgeKeys` runs up to | • **6. `previewDuration` decodes all channel timelines every tick** in | • **7. Tighten `hitKey` row scoping.** The 12px radius exceeds half a row
+[2026-08-29T14:35:06.654Z] [child stdout] [telegram-connect] Telegram connector ready {
+[2026-08-29T14:35:06.655Z] [child stdout] rpcAddress: "ws://127.0.0.1:25464/hub",
+[2026-08-29T14:35:06.656Z] [child stdout] mode: "polling",
+[2026-08-29T14:35:06.656Z] [child stdout] }
+[2026-08-29T14:35:06.656Z] [child stdout] [telegram] connected as @TodCode_bot mode=polling rpc=ws://127.0.0.1:25464/hub provider=cline model=poolside/laguna-s2.1:free tools=on
+[2026-08-29T14:35:06.656Z] [child stdout] [telegram] send /clear in a chat to start a fresh RPC session
+[2026-08-29T14:35:06.657Z] [child stdout] [telegram] send /whereami in a chat to get its delivery thread id
+[2026-08-29T14:35:06.657Z] [child stdout] [telegram] use /tools, /yolo, or /cwd <path> to update runtime settings
+[2026-08-29T14:35:06.657Z] [child stdout] [telegram] send /exit in a chat or press Ctrl+C to stop

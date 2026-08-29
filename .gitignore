@@ -2,3 +2,4 @@ agents.pids.json
 agents.state-*.json
 *.log
 *.out
+system_prompt.md
