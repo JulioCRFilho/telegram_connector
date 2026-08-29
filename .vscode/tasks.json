@@ -17,9 +17,9 @@
             }
         },
         {
-            "label": "kill cline connect",
+            "label": "open fscene",
             "type": "shell",
-            "command": "pkill -f \"cline connect\" || true",
+            "command": "node main.js FSCENE",
             "problemMatcher": [],
             "group": {
                 "kind": "build",
@@ -27,6 +27,37 @@
             },
             "options": {
                 "cwd": "${workspaceFolder}",
+            }
+        },
+        {
+            "label": "open evol",
+            "type": "shell",
+            "command": "node main.js EVOL",
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "options": {
+                "cwd": "${workspaceFolder}",
+            }
+        },
+        {
+            "label": "kill all agents",
+            "type": "shell",
+            "command": "pkill -f 'cline connect' 2>/dev/null; pkill -f 'node main.js' 2>/dev/null; echo 'All agents killed'",
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "options": {
+                "cwd": "${workspaceFolder}",
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "showReuseMessage": false
             }
         }
     ]
