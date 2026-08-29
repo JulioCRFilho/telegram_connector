@@ -1,5 +1,6 @@
 agents.pids.json
 agents.state-*.json
+agents.cooldowns-*.json
 *.log
 *.out
 system_prompt.md

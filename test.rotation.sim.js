@@ -9,9 +9,19 @@ process.env[`TELEGRAM_BOT_TOKEN_${TEST_PROJECT}`] = '123456789:TEST';
 process.env.TELEGRAM_API_KEYS = 'sk-or-v1-aaa, sk-or-v1-bbb';
 process.env.TELEGRAM_AVAILABLE_MODELS = 'openrouter/auto, deepseek/deepseek-chat';
 process.env.TELEGRAM_RESTART_DELAY_MS = '50';
+// Tests drive the OPT-IN HTTP probe stage: DOUBLE opt-in — the test sets both
+// TELEGRAM_PROBE_HTTP=1 and a mock provider base URL (the fetch mock below
+// answers it). Production NEVER sets these for cline-default providers, so the
+// probe stays on cline's own client (spawn-based).
+process.env.TELEGRAM_PROBE_HTTP = '1';
+process.env.TELEGRAM_API_BASE = 'https://mock-provider.test';
 process.env.TELEGRAM_TASKS_DIR = require('os').tmpdir();
 process.env.TELEGRAM_ALLOWED_USER_ID = '123456789'; // so notifyUser actually emits + logs
 process.env.PATH = '';                    // any spawn attempt fails harmlessly (ENOENT)
+// Persisted cooldown grid must go to the tmpdir (never the repo) in tests.
+const tmpCooldowns = require('path').join(require('os').tmpdir(), 'cooldowns-SIMSIM.json');
+process.env.TELEGRAM_COOLDOWNS_FILE = tmpCooldowns;
+require('fs').rmSync(tmpCooldowns, { force: true });   // start from a clean grid
 
 const m = require('./main.js');
 
@@ -77,6 +87,21 @@ function restoreLog() { if (console.log !== origLog) console.log = origLog; }
   t(/Rotating to key #1, model #0/.test(logS2), 'wrapper rotated again → key #1 / model #0');
   t(JSON.stringify(started) === JSON.stringify([[1, 0]]), `only the PASSING combo (1,0) started — never the rejected one (got ${JSON.stringify(started)})`);
   t(/Preflight check rejected key #0/.test(logS2), 'user-facing rejection notice was queued');
+  await sleep(300);                       // let the debounced cooldown-grid write land
+
+  // ── Scenario 3: the grid is CONSULTED, not guessed ──────────────────────
+  t(m.comboUnblockAt(0, 0) > Date.now(), 'comboUnblockAt(0,0) stays blocked with its real unblock epoch');
+  t(m.comboUnblockAt(1, 0) === 0, 'comboUnblockAt(1,0) is free (0 = never blocked)');
+  const rec = m.recommendCombo();
+  t(rec.key === 1 && rec.model === 0 && rec.waitMs === 0, `recommendCombo consults the grid → first free (1,0) [got ${JSON.stringify(rec)}]`);
+  const grid = m.gridStatus();
+  t(grid.includes('Cooldown grid') && grid.includes('✅') && grid.includes('⏳'), 'gridStatus renders available + cooldown rows');
+  t(/key #0 \/ openrouter\/auto — ⏳/.test(grid) && /cooldown/.test(grid), 'gridStatus shows the blocked combo with the real cooldown marker');
+
+  // Persistence round-trip: the 401 block survives a "wrapper restart".
+  m.blockedCombos.clear();
+  m._cooldowns.load();                     // reload from the persisted file
+  t(m.blockedCombos.has('0:0') && m.comboUnblockAt(0, 0) > Date.now(), 'persisted grid reloads after a wrapper restart (daily limit not forgotten)');
 
   restoreLog();
   const line = `${passCount} passed, ${failCount} failed`;

@@ -23,13 +23,15 @@
 //
 // Run:  node main.js <NAME>   (e.g. `node main.js MANAGER`).
 // ─────────────────────────────────────────────────────────────────────────────
-const { randomInt } = require('crypto');
+// Header comment documents boot and the config env; no runtime import here.
 const config = require('./lib/config');        // validates env on load
 const log = require('./lib/log');
 const state = require('./lib/state');
 const procs = require('./lib/procs');
 const supervisor = require('./lib/supervisor');
 const logs = require('./lib/logs');
+const rotation = require('./lib/rotation');
+const cooldowns = require('./lib/cooldowns');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // WRAPPER LIFECYCLE (boot only). None of this runs when main.js is required as
@@ -65,11 +67,20 @@ if (require.main === module) {
   // Starts the wrapper: purge stale connectors, then give them a moment to
   // release the bot token before our connector takes over.
   procs.purgeStale();
+  // Reload the PERSISTED cooldown grid BEFORE the first start so daily-limit
+  // blocks from previous runs are honored (the wrapper consults the real
+  // cooldowns instead of starting on a random — possibly still-blocked — slot).
+  cooldowns.load();
   log(`[Rotator] Stale connectors purged; starting in ${config.RESTART_DELAY_MS}ms...`);
   setInterval(logs.pollLogs, 1000);            // check cline's logs every second
-  // Boot also goes through startVerified: the first key+model is probed, not
-  // trusted, exactly like every post-rotation restart.
-  setTimeout(() => supervisor.startVerified(randomInt(config.API_KEYS.length), randomInt(config.MODELS.length)), config.RESTART_DELAY_MS);
+  // Boot also goes through startVerified: the chosen (key, model) is probed,
+  // not trusted, exactly like every post-rotation restart. The choice itself is
+  // a CONSULT of the cooldown grid — the first combo that is free (or, when
+  // every pair is on a daily-limit cooldown, the one that frees up first) —
+  // never a random slot.
+  const boot = rotation.recommendCombo();
+  log(`[Rotator] Boot consulted cooldown grid → key #${boot.key}, model #${boot.model}${boot.waitMs > 0 ? ` (still cooling; earliest free in ${Math.round(boot.waitMs / 60000)}m)` : ''}.`);
+  setTimeout(() => supervisor.startVerified(boot.key, boot.model), config.RESTART_DELAY_MS);
 }
 
 // Test hook: when main.js is required as a module (never executed directly) the
@@ -77,6 +88,7 @@ if (require.main === module) {
 if (require.main !== module) {
   const probe = require('./lib/probe');
   const rotation = require('./lib/rotation');
+  const cooldowns = require('./lib/cooldowns');
   module.exports = {
     parseCooldownMs: rotation.parseCooldownMs,
     classifyProbeFailure: probe.classifyProbeFailure,
@@ -85,6 +97,11 @@ if (require.main !== module) {
     onProbeReject: supervisor.onProbeReject,
     blockedCombos: state.blockedCombos,
     probeBlockAt: rotation.probeBlockAt,
+    comboUnblockAt: rotation.comboUnblockAt,
+    recommendCombo: rotation.recommendCombo,
+    gridStatus: rotation.gridStatus,
+    cooldownsFile: config.COOLDOWNS_FILE,
+    _cooldowns: cooldowns,                      // test seam: save/load round-trip
     PROBE_ENABLED: probe.PROBE_ENABLED,
     // Test-only controls: reset rotation state between simulated scenarios.
     _test: {

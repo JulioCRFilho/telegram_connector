@@ -14,6 +14,12 @@ process.env.TELEGRAM_API_KEYS =
   'sk-or-v1-111111111111111111111111111111111111111111111111-bad';
 process.env.TELEGRAM_AVAILABLE_MODELS = 'openrouter/auto, deepseek/deepseek-chat';
 process.env.TELEGRAM_PROBE_TIMEOUT_MS = '8000'; // keep the live probe snappy
+// The live-probe section below explicitly exercises the OPT-IN HTTP probe stage
+// via DOUBLE opt-in (TELEGRAM_PROBE_HTTP=1 + TELEGRAM_API_BASE). This test uses
+// OpenRouter-format test keys, so it points the base URL at OpenRouter — the
+// production cline-default provider NEVER sets either variable.
+process.env.TELEGRAM_PROBE_HTTP = '1';
+process.env.TELEGRAM_API_BASE = 'https://openrouter.ai';
 
 const m = require('./main.js');
 
