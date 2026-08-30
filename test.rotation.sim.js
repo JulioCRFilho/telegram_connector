@@ -60,7 +60,9 @@ function restoreLog() { if (console.log !== origLog) console.log = origLog; }
   const logS1 = outLines.join('\n');
   t(m.blockedCombos.size === 4, 'all 4 key×model combos got blocked by probe failures');
   t(/All 2×2 combos unavailable/.test(logS1), 'full-cooldown park engaged');
-  t(/Try again in 21h 2m/.test(logS1) || /21h/.test(logS1), 'quoted 21h cooldown surfaced in the block log');
+  t(/Blocked ALL .* keys on model #0 .* model-scoped limit/.test(logS1), 'model-scoped limit blocked every key of the model at once');
+  const s1rec = m.blockedCombos.get('0:0');
+  t(s1rec && Math.abs(s1rec.cooldownMs - (21 * 60 + 2) * 60 * 1000) < 5 * 60 * 1000, 'quoted 21h 2m cooldown persisted on the blocked combo');
   const startsS1 = (logS1.match(/Starting connector/g) || []).length;
   t(startsS1 === 0, 'no connector ever started — every combo was tested and rejected');
 
@@ -91,7 +93,7 @@ function restoreLog() { if (console.log !== origLog) console.log = origLog; }
   t(/Blocked key #0 \+ model #0/.test(logS2), 'rejection was logged as a probe block');
   t(/Rotating to key #1, model #0/.test(logS2), 'wrapper rotated again → key #1 / model #0');
   t(JSON.stringify(started) === JSON.stringify([[1, 0]]), `only the PASSING combo (1,0) started — never the rejected one (got ${JSON.stringify(started)})`);
-  t(/Preflight check rejected key #0/.test(logS2), 'user-facing rejection notice was queued');
+  t(/was rejected — trying another one/.test(logS2), 'user-facing rejection notice was queued');
   await sleep(300);                       // let the debounced cooldown-grid write land
 
   // ── Scenario 3: the grid is CONSULTED, not guessed ──────────────────────

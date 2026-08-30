@@ -273,6 +273,26 @@ paused by a mid-task user interruption. `push` dedupes identical text, caps at
 wrapper restarts.
 
 ### `lib/chat.js`
+
+All Telegram communication. The user-facing language is deliberately **short, human, and outcome-focused** — internal machinery (keys, models, cooldown grids, ports) never reaches the chat; it lives in `/status` and the logs.
+
+What the user sees, per event:
+
+| Event | Message |
+|---|---|
+| Task accepted | `Got it — working on it now. I'll send the result here as soon as it's done.` (one line; no key/model/grid) |
+| Progress tick | `Quick update: 3 of 8 tasks done.` — sent ONLY when the task-list count advanced since the last message (silent otherwise, capped) |
+| Provider rate-limited | `⚠️ The AI provider is rate-limited right now (frees up ~HH:MM UTC). Your request is queued — I'll start automatically as soon as capacity is back.` |
+| Probe rejects a combo | `⚠️ <reason> was rejected — trying another one. Your work resumes automatically…` (throttled so a sweep over dead combos doesn't spam) |
+| Everything cooling | `⚠️ All AI providers are unavailable right now (next free ~HH:MM UTC). I'll keep checking automatically…` |
+| Back online | `✅ Back online — 4/8 tasks done. Continuing with: • …` |
+| Mid-task interrupt | `Heads up — I've paused what I was on to handle your new message first. The earlier task is saved and I'll pick it back up right after.` |
+| Paused task resumes | `Done with your latest request — picking the earlier task back up now: "<original text>"` |
+| Message during park | `⏳ … queued until ~HH:MM UTC` (persisted, retried automatically) |
+| Connection drop | `⚠️ The connection dropped — restarting now. Your work resumes automatically.` |
+
+Chat commands: `/keys` (cooldown grid), `/status` (instance, current combo, uptime, park window). Heartbeats ("still working") are log-only — the chat only hears about progress that actually happened.
+
 Telegram Bot API messaging + turn UX:
 
 - Another message from the same chat while a turn is active **interrupts the

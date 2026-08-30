@@ -63,7 +63,7 @@ global.fetch = async (_url, opts) => {
   t(interrupted.count() === 1 && interrupted.pop().text === 'review the chest cutscene in scene_intro',
     'the in-flight task was PAUSED into the persisted queue (not lost)');
   t(restarts === 1, 'connector restart triggered so the new message is answered first');
-  t(sent.some((s) => s.includes('Pausing the current task')), 'user was told the task is paused, not dropped');
+  t(sent.some((s) => s.includes("paused what I was on")), 'user was told the task is paused, not dropped');
 
   // ── 3) identical re-send is NOT an interruption ───────────────────────────
   interrupted.clear();
@@ -83,7 +83,7 @@ global.fetch = async (_url, opts) => {
   t(state.lastUserMessage === 'review the chest cutscene in scene_intro',
     'paused task is promoted back to the pending request');
   t(restarts === 1, 'restart triggered to continue the paused task');
-  t(sent.some((s) => s.includes('resuming the paused task')), 'user was told the paused task resumes');
+  t(sent.some((s) => s.includes('picking the earlier task back up')), 'user was told the paused task resumes');
   t(interrupted.count() === 0, 'queue drained');
 
   // ── 5) no paused task → resume is a no-op; guard flags hold ───────────────
