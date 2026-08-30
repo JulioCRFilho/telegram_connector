@@ -93,6 +93,7 @@ if (require.main === module) {
   cooldowns.load();
   log(`[Rotator] Stale connectors purged; starting in ${config.RESTART_DELAY_MS}ms...`);
   setInterval(logs.pollLogs, 1000);            // check cline's logs every second
+  supervisor.startGridWatcher();               // rotate proactively when OUR combo gets blocked (e.g. by a peer instance)
   // Boot also goes through startVerified: the chosen (key, model) is probed,
   // not trusted, exactly like every post-rotation restart. The choice itself is
   // a CONSULT of the cooldown grid — the first combo that is free (or, when
@@ -128,6 +129,9 @@ if (require.main !== module) {
     onTimeoutSignal: supervisor.onTimeoutSignal,
     clearTimeoutStrikes: supervisor.clearTimeoutStrikes,
     getTimeoutStrikes: supervisor._getTimeoutStrikes,
+    gridWatchTick: supervisor.gridWatchTick,
+    startGridWatcher: supervisor.startGridWatcher,
+    stopGridWatcher: supervisor.stopGridWatcher,
     blockedCombos: state.blockedCombos,
     probeBlockAt: rotation.probeBlockAt,
     comboUnblockAt: rotation.comboUnblockAt,
@@ -142,6 +146,7 @@ if (require.main !== module) {
       setStartPending(v) { state.startPending = v; },
       setLastProbeNoticeAt(v) { state.lastProbeNoticeAt = v; },
       setLastLimitHandledAt(v) { state.lastLimitHandledAt = v; },
+      setCurrentCombo(k, m) { state.curKeyIndex = k; state.curModelIndex = m; },
       setStartOverride(fn) { supervisor._setStartOverride(fn); },
       clearParkMonitor() { supervisor.clearParkMonitor(); },
     },

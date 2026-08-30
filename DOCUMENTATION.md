@@ -27,7 +27,10 @@ The only runnable file. Two modes:
   - **Duplicate-instance guard**: refuses to start if another live wrapper for
     the same NAME exists (they would fight over Telegram `getUpdates`).
   - Purges stale connectors, **loads the persisted cooldown grid**, starts a
-    1 s log-polling loop, then consults the grid via `rotation.recommendCombo()`
+    1 s log-polling loop and the **grid watcher** (every 30 s: rotates the live
+    connector proactively when its own combo becomes blocked — e.g. by a peer
+    instance's shared-grid block — BEFORE a user message can hit the raw 429),
+    then consults the grid via `rotation.recommendCombo()`
     to pick the boot combo. If every combo is cooling down, it parks
     (`supervisor.parkOnCooldown`) until the earliest one frees; otherwise it
     starts through `supervisor.startVerified()`.
@@ -133,6 +136,16 @@ key, explicit `--model`, RPC port, allowed user, system prompt from
   wrapper retried a timing-out combo forever with no rotation.
 - `clearTimeoutStrikes()` — resets the timeout strike counter after a healthy
   turn (called from `logs.js` on "Telegram reply completed").
+- `gridWatchTick()` / `startGridWatcher()` — every 30 s, rotates the live
+  connector as soon as its CURRENT combo appears blocked in the (shared)
+  cooldown grid, before any user message triggers the bridge's raw 429 error;
+  sends one concise friendly notice. No-op while parked, restarting, probing,
+  or within the limit dedupe window.
+- `onLimitSignal` also sends ONE concise friendly line
+  ("🔑 <model> hit its daily free limit — rotating… message retries
+  automatically") so the bridge's raw JSON error reads as handled. NOTE: the
+  raw error itself is sent by the cline bridge directly to Telegram — the
+  wrapper cannot suppress or edit it, only react.
 - `queueResume()` — arms the auto-resume consumed by the next start.
 
 ### `lib/probe.js`

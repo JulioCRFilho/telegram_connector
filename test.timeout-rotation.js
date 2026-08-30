@@ -84,6 +84,29 @@ const TIMEOUT_LINE = JSON.stringify({
   m.clearTimeoutStrikes();
   t(m.getTimeoutStrikes() === 0, 'clearTimeoutStrikes resets the counter (healthy turn observed)');
 
+  // ── 5) grid watcher: peer-blocked current combo rotates WITHOUT a 429 ─────
+  // Live bug this covers: EVOL blocks z-ai in the SHARED grid at 15:38, but
+  // MANAGER's live connector stayed on z-ai until a user message triggered a
+  // second raw 429 at 15:54. The watcher must rotate proactively instead.
+  fs.rmSync(tmpCooldowns, { force: true });
+  m.blockedCombos.clear();
+  started.length = 0;
+  m._test.clearParkMonitor();
+  m._test.setRestarting(false);
+  m._test.setStartPending(false);
+  m._test.setLastLimitHandledAt(0);          // leave the limit dedupe window
+  m._test.setCurrentCombo(0, 0);
+  outLines.length = 0;
+  m.gridWatchTick();                            // combo free → no-op
+  t(started.length === 0, 'watcher is a no-op while the current combo is free');
+  m.blockedCombos.set('0:0', { unblockAt: Date.now() + 3600000, blockedAt: Date.now(), cooldownMs: 3600000, reason: 'peer limit (simulated)', detail: '' });
+  outLines.length = 0;
+  m.gridWatchTick();                            // peer blocked OUR live combo
+  await sleep(400);
+  t(/Grid watcher: current combo key #0 \/ model z-ai\/glm-5.3-flash is blocked/.test(outLines.join('\n')), 'watcher detects the peer-blocked live combo');
+  t(started.length >= 1 && started.every(([k, mm]) => !(k === 0 && mm === 0)), `watcher rotated off the peer-blocked combo (started ${JSON.stringify(started)})`);
+  t(/Your messages retry automatically/.test(outLines.join('\n')), 'watcher sent ONE concise friendly notice');
+
   console.log = console.log; // keep captured logging through teardown
   const line = `${pass} passed, ${fail} failed`;
   process.stdout.write(`\n${'.'.repeat(line.length)}\n${line}\n${'.'.repeat(line.length)}\n`);
