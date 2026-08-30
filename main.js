@@ -83,9 +83,11 @@ if (require.main === module) {
   if (boot.waitMs > 0) {
     // Every combo is on cooldown — don't probe (the probe would pass because
     // the connector can connect to Telegram, but the combo can't make API
-    // calls). Instead, park on the earliest-free combo and wait.
+    // calls). Instead, park on the earliest-free combo and wait. The park
+    // monitor acks user messages (getUpdates) and auto-resumes when a combo
+    // frees.
     log(`[Rotator] All combos cooling; parking until cooldown expires.`);
-    supervisor.scheduleRestart(boot.key, boot.model, boot.waitMs, true);
+    supervisor.parkOnCooldown(boot.key, boot.model, boot.waitMs);
   } else {
     setTimeout(() => supervisor.startVerified(boot.key, boot.model), config.RESTART_DELAY_MS);
   }
@@ -117,6 +119,7 @@ if (require.main !== module) {
       setStartPending(v) { state.startPending = v; },
       setLastProbeNoticeAt(v) { state.lastProbeNoticeAt = v; },
       setStartOverride(fn) { supervisor._setStartOverride(fn); },
+      clearParkMonitor() { supervisor.clearParkMonitor(); },
     },
   };
 }

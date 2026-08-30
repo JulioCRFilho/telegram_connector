@@ -24,8 +24,9 @@ The only runnable file. Two modes:
     the same NAME exists (they would fight over Telegram `getUpdates`).
   - Purges stale connectors, **loads the persisted cooldown grid**, starts a
     1 s log-polling loop, then consults the grid via `rotation.recommendCombo()`
-    to pick the boot combo. If every combo is cooling down, it parks until the
-    earliest one frees; otherwise it starts through `supervisor.startVerified()`.
+    to pick the boot combo. If every combo is cooling down, it parks
+    (`supervisor.parkOnCooldown`) until the earliest one frees; otherwise it
+    starts through `supervisor.startVerified()`.
 - **Required as a module** (the tests): skips the lifecycle and exports the
   probe/rotation internals (`probeCombo`, `parseCooldownMs`, `startVerified`,
   `blockedCombos`, `gridStatus`, …) plus `_test` seams for resetting rotation
@@ -80,9 +81,19 @@ key, explicit `--model`, RPC port, allowed user, system prompt from
   pid children-first, SIGKILL escalation after 3 s, absolute safety timeout.
   Calls back only when the child is actually gone.
 - `scheduleRestart(index, modelIndex, delay, afterCooldown)` — stops the old
-  connector, purges stale daemons, re-validates the target against the
-  cooldown grid right before starting (`resolveStartCombo`), then starts.
-  If a restart/probe is already in flight it only queues `pendingRotation`.
+  connector, purges stale daemons, **reconciles the cooldown grid from disk**
+  (`cooldowns.load()`) and re-validates the target right before starting
+  (`resolveStartCombo`). If a restart/probe is already in flight it only queues
+  `pendingRotation`; if the target is still blocked it hands off to the park
+  monitor instead of re-arming a fragile long setTimeout.
+- `parkOnCooldown(key, model, waitMs)` / `startParkMonitor()` — when EVERY
+  key×model combo is cooling down: stop the connector, purge stale daemons, and
+  arm the **park monitor** — a wake timer at the grid's REAL earliest unblock
+  (re-validated from disk when it fires) plus a 30 s getUpdates poller that
+  answers user messages with a "queued" notice and persists them for the
+  auto-resume. This replaced the old recursive `scheduleRestart(…, waitMs,
+  true)` parking, which a stale/out-of-grid cooldown record could collapse to a
+  30 s re-park busy loop with no connector running (the "agents frozen" bug).
 - `startVerified(index, modelIndex)` — runs the **pre-flight probe**
   (`probe.probeCombo`) before every start; `ok:true`/inconclusive → start,
   `ok:false` → `onProbeReject`. Sends the "back online" notice when the start
@@ -134,7 +145,10 @@ persisted via `lib/cooldowns.js`.
 - `scanFromCurrent()` / `pickNextCombo()` — next non-blocked slot starting one
   after the current combo; prefers a *different model* when the current one is
   limit-hit. When everything is blocked, parks on the earliest-free combo and
-  returns `waitMs` (quoted time + 2 min grace, min 30 s).
+  returns `waitMs` (quoted time + 2 min grace, min 30 s). `earliestUnblock()`
+  only counts IN-GRID records — a stale record from a past config would
+  otherwise collapse the park wait to the 30 s floor (the "re-parking for 1m"
+  busy loop after a model-list change).
 - `pickNextComboFromStart()` / `recommendCombo()` — full slot-0 scan used by
   probe rejection sweeps and boot.
 - `resolveStartCombo(key, model)` — start-time re-validation: if the target
@@ -148,11 +162,15 @@ persisted via `lib/cooldowns.js`.
 Persistence of the cooldown grid to `agents.cooldowns.json`. Daily-limit blocks
 last up to ~24 h, so an in-memory grid would forget them on every restart.
 
+- `gridKeyValid(recordKey)` — bounds-check a persisted `"k:m"` record against
+  the CURRENT key/model lists; stale out-of-grid records (from a config change)
+  are dropped on load AND never written on save.
 - `load()` — rebuilds `state.blockedCombos` / `state.modelLimitHit` at boot;
-  drops expired records and anything older than a 26 h safety cap.
+  drops expired records, anything older than a 26 h safety cap, and out-of-grid
+  records — healing the file when stale ones are found.
 - `save()` / `scheduleSave()` — write-through after every change, debounced
-  250 ms so dense block/rotate sweeps do one write; expired entries are dropped
-  on write so the file never goes stale.
+  250 ms so dense block/rotate sweeps do one write; expired and out-of-grid
+  entries are dropped on write so the file never goes stale.
 
 
 ### `lib/procs.js`
@@ -188,6 +206,11 @@ Telegram Bot API messaging + turn UX:
 
 - `sendTelegramMessage(chatId, text)` / `notifyUser(text)` — wrapper-initiated
   notices (best-effort, never throw).
+- `ackQueuedDuringPark(earliestUnblockAt)` — **park-time poller**: while every
+  key×model combo is on cooldown no connector runs, so the wrapper polls
+  Telegram `getUpdates` itself, answers each new user message with a "⏳ queued
+  until ~HH:MM UTC" notice and persists it (`lastmessage.save`) so the
+  auto-resume retries it the moment quota frees.
 - **Turn machinery**: a user message that gets no reply within 3 min is
   acknowledged ("🛠️ On it — …") with the live key/model and `gridSummary()`;
   while it runs, progress pings every 5 min (cap 12 ≈ 1 h) report real task-list
@@ -290,6 +313,13 @@ Regression test for the `agents.pids.json` lost-update bug: forks 8 children ×
 3 rounds all writing their pid entry concurrently (`test-pids-race-child.js`
 just calls `procs.writePidEntry()`), then asserts every instance survived —
 verifying the `O_EXCL` pid-file lock and atomic rename.
+
+### `test.park-stale-grid.js`
+Regression test for the "agents frozen" bug: stale out-of-grid cooldown records
+(from a config change) used to collapse the all-cooldown park to a 30 s
+re-park loop. Asserts `load()` drops/heals out-of-grid records and that
+`pickNextCombo` / `resolveStartCombo` honor the grid's REAL earliest unblock
+despite poison records.
 
 Run all with plain `node <file>` (no test framework).
 

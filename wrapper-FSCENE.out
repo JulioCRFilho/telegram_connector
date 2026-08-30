@@ -1323,3 +1323,90 @@ Update progress to the user every task completed.
 [2026-08-29T20:29:03.227Z] [child stdout] [telegram] send /whereami in a chat to get its delivery thread id
 [2026-08-29T20:29:03.228Z] [child stdout] [telegram] use /tools, /yolo, or /cwd <path> to update runtime settings
 [2026-08-29T20:29:03.228Z] [child stdout] [telegram] send /exit in a chat or press Ctrl+C to stop
+[Rotator] ERROR: environment variable TELEGRAM_API_KEYS is not set.
+[2026-08-29T21:34:43.767Z] [Cooldown] Loaded 5 persisted block(s) from /Users/thetod/Projects/telegram_connector/agents.cooldowns.json — rotation resumes with the real cooldown grid.
+[2026-08-29T21:34:43.771Z] [Rotator] Stale connectors purged; starting in 2000ms...
+[2026-08-29T21:34:43.772Z] [Rotator] Boot consulted cooldown grid → key #0, model #1.
+[2026-08-29T21:34:56.617Z] [Probe] Sent SIGTERM to probe shim pid 87326 and 1 descendant(s).
+[2026-08-29T21:34:56.617Z] [Probe] key #0 + model #1 (deepseek/deepseek-v4-flash) — ok (10843ms).
+[2026-08-29T21:34:56.618Z] [Rotator] Starting connector (key #0, model #1)
+[2026-08-29T21:34:56.618Z] [Rotator] pid=87308 running: cline connect telegram -i -k 8700429950:AAGJtbNIzq-glV2Ft-k81_4HOMPmR_dK8yU --api-key sk_57e70fdfcc744a3abdde03eecea1b9495a193ffbd14883c2a8a6757cba9f6dfe --rpc-address 127.0.0.1:25464 --model deepseek/deepseek-v4-flash --allowed-user-id 8844466799 --system Use short answers until asked for explanations.
+
+Make short resumes to explain what you did.
+
+Update progress to the user every task completed.
+[2026-08-29T21:34:56.663Z] [Telegram] → chat 8844466799: 🔄 Agent is back online — 📋 6/8 tasks completed. Picking up pending work: | • **6. `previewDuration` decodes all channel timelines every tick** in | • **7. Tighten `hitKey` row scoping.** The 12px radius exceeds half a row
+[2026-08-29T21:34:59.151Z] [child stdout] [telegram-connect] Telegram connector ready {
+[2026-08-29T21:34:59.151Z] [child stdout] rpcAddress: "ws://127.0.0.1:25464/hub",
+[2026-08-29T21:34:59.151Z] [child stdout] mode: "polling",
+[2026-08-29T21:34:59.152Z] [child stdout] }
+[2026-08-29T21:34:59.152Z] [child stdout] [telegram] connected as @TodCode_bot mode=polling rpc=ws://127.0.0.1:25464/hub provider=cline model=deepseek/deepseek-v4-flash tools=on
+[2026-08-29T21:34:59.152Z] [child stdout] [telegram] send /clear in a chat to start a fresh RPC session
+[2026-08-29T21:34:59.152Z] [child stdout] [telegram] send /whereami in a chat to get its delivery thread id
+[2026-08-29T21:34:59.152Z] [child stdout] [telegram] use /tools, /yolo, or /cwd <path> to update runtime settings
+[2026-08-29T21:34:59.152Z] [child stdout] [telegram] send /exit in a chat or press Ctrl+C to stop
+[2026-08-29T21:36:43.545Z] [Cooldown] Loaded 5 persisted block(s) from /Users/thetod/Projects/telegram_connector/agents.cooldowns.json — rotation resumes with the real cooldown grid.
+[2026-08-29T21:36:43.547Z] [Rotator] Stale connectors purged; starting in 2000ms...
+[2026-08-29T21:36:43.548Z] [Rotator] Boot consulted cooldown grid → key #0, model #1.
+[2026-08-29T21:36:56.235Z] [Probe] Sent SIGTERM to probe shim pid 88040 and 1 descendant(s).
+[2026-08-29T21:36:56.236Z] [Probe] key #0 + model #1 (deepseek/deepseek-v4-flash) — ok (10685ms).
+[2026-08-29T21:36:56.236Z] [Rotator] Starting connector (key #0, model #1)
+[2026-08-29T21:36:56.236Z] [Rotator] pid=88013 running: cline connect telegram -i -k 8700429950:AAGJtbNIzq-glV2Ft-k81_4HOMPmR_dK8yU --api-key sk_57e70fdfcc744a3abdde03eecea1b9495a193ffbd14883c2a8a6757cba9f6dfe --rpc-address 127.0.0.1:25464 --model deepseek/deepseek-v4-flash --allowed-user-id 8844466799 --system Use short answers until asked for explanations.
+
+Make short resumes to explain what you did.
+
+Update progress to the user every task completed.
+[2026-08-29T21:36:56.262Z] [Telegram] → chat 8844466799: 🔄 Agent is back online — 📋 6/8 tasks completed. Picking up pending work: | • **6. `previewDuration` decodes all channel timelines every tick** in | • **7. Tighten `hitKey` row scoping.** The 12px radius exceeds half a row
+[2026-08-29T21:36:58.555Z] [child stdout] [telegram-connect] Telegram connector ready {
+[2026-08-29T21:36:58.555Z] [child stdout] rpcAddress: "ws://127.0.0.1:25464/hub",
+[2026-08-29T21:36:58.555Z] [child stdout] mode: "polling",
+[2026-08-29T21:36:58.555Z] [child stdout] }
+[2026-08-29T21:36:58.556Z] [child stdout] [telegram] connected as @TodCode_bot mode=polling rpc=ws://127.0.0.1:25464/hub provider=cline model=deepseek/deepseek-v4-flash tools=on
+[2026-08-29T21:36:58.556Z] [child stdout] [telegram] send /clear in a chat to start a fresh RPC session
+[2026-08-29T21:36:58.556Z] [child stdout] [telegram] send /whereami in a chat to get its delivery thread id
+[2026-08-29T21:36:58.556Z] [child stdout] [telegram] use /tools, /yolo, or /cwd <path> to update runtime settings
+[2026-08-29T21:36:58.556Z] [child stdout] [telegram] send /exit in a chat or press Ctrl+C to stop
+[2026-08-29T22:01:50.998Z] [Rotator] SIGTERM received; stopping connector.
+[2026-08-29T22:38:43.983Z] [Cooldown] Loaded 7 persisted block(s) from /Users/thetod/Projects/telegram_connector/agents.cooldowns.json — rotation resumes with the real cooldown grid.
+[2026-08-29T22:38:43.986Z] [Rotator] Stale connectors purged; starting in 2000ms...
+[2026-08-29T22:38:43.986Z] [Rotator] Boot consulted cooldown grid → key #0, model #0.
+[2026-08-29T22:38:56.530Z] [Probe] Sent SIGTERM to probe shim pid 6306 and 1 descendant(s).
+[2026-08-29T22:38:56.531Z] [Probe] key #0 + model #0 (z-ai/glm-5.3-flash) — ok (10544ms).
+[2026-08-29T22:38:56.532Z] [Rotator] Starting connector (key #0, model #0)
+[2026-08-29T22:38:56.532Z] [Rotator] pid=6249 running: cline connect telegram -i -k 8700429950:AAGJtbNIzq-glV2Ft-k81_4HOMPmR_dK8yU --api-key sk_57e70fdfcc744a3abdde03eecea1b9495a193ffbd14883c2a8a6757cba9f6dfe --rpc-address 127.0.0.1:25464 --model z-ai/glm-5.3-flash --allowed-user-id 8844466799 --system Use short answers until asked for explanations.
+
+Make short resumes to explain what you did.
+
+Update progress to the user every task completed.
+[2026-08-29T22:38:56.572Z] [Telegram] → chat 8844466799: 🔄 Agent is back online — 📋 6/8 tasks completed. Picking up pending work: | • **6. `previewDuration` decodes all channel timelines every tick** in | • **7. Tighten `hitKey` row scoping.** The 12px radius exceeds half a row
+[2026-08-29T22:38:58.896Z] [child stdout] [telegram-connect] Telegram connector ready {
+[2026-08-29T22:38:58.897Z] [child stdout] rpcAddress: "ws://127.0.0.1:25464/hub",
+[2026-08-29T22:38:58.897Z] [child stdout] mode: "polling",
+[2026-08-29T22:38:58.897Z] [child stdout] }
+[2026-08-29T22:38:58.897Z] [child stdout] [telegram] connected as @TodCode_bot mode=polling rpc=ws://127.0.0.1:25464/hub provider=cline model=z-ai/glm-5.3-flash tools=on
+[2026-08-29T22:38:58.898Z] [child stdout] [telegram] send /clear in a chat to start a fresh RPC session
+[2026-08-29T22:38:58.898Z] [child stdout] [telegram] send /whereami in a chat to get its delivery thread id
+[2026-08-29T22:38:58.898Z] [child stdout] [telegram] use /tools, /yolo, or /cwd <path> to update runtime settings
+[2026-08-29T22:38:58.898Z] [child stdout] [telegram] send /exit in a chat or press Ctrl+C to stop
+[2026-08-29T22:39:50.724Z] [Cooldown] Loaded 7 persisted block(s) from /Users/thetod/Projects/telegram_connector/agents.cooldowns.json — rotation resumes with the real cooldown grid.
+[2026-08-29T22:39:50.726Z] [Rotator] Stale connectors purged; starting in 2000ms...
+[2026-08-29T22:39:50.727Z] [Rotator] Boot consulted cooldown grid → key #0, model #0.
+[2026-08-29T22:40:03.219Z] [Probe] Sent SIGTERM to probe shim pid 7820 and 1 descendant(s).
+[2026-08-29T22:40:03.219Z] [Probe] key #0 + model #0 (z-ai/glm-5.3-flash) — ok (10491ms).
+[2026-08-29T22:40:03.220Z] [Rotator] Starting connector (key #0, model #0)
+[2026-08-29T22:40:03.220Z] [Rotator] pid=7764 running: cline connect telegram -i -k 8700429950:AAGJtbNIzq-glV2Ft-k81_4HOMPmR_dK8yU --api-key sk_57e70fdfcc744a3abdde03eecea1b9495a193ffbd14883c2a8a6757cba9f6dfe --rpc-address 127.0.0.1:25464 --model z-ai/glm-5.3-flash --allowed-user-id 8844466799 --system Use short answers until asked for explanations.
+
+Make short resumes to explain what you did.
+
+Update progress to the user every task completed.
+[2026-08-29T22:40:03.271Z] [Telegram] → chat 8844466799: 🔄 Agent is back online — 📋 6/8 tasks completed. Picking up pending work: | • **6. `previewDuration` decodes all channel timelines every tick** in | • **7. Tighten `hitKey` row scoping.** The 12px radius exceeds half a row
+[2026-08-29T22:40:05.692Z] [child stdout] [telegram-connect] Telegram connector ready {
+[2026-08-29T22:40:05.692Z] [child stdout] rpcAddress: "ws://127.0.0.1:25464/hub",
+[2026-08-29T22:40:05.692Z] [child stdout] mode: "polling",
+[2026-08-29T22:40:05.692Z] [child stdout] }
+[2026-08-29T22:40:05.693Z] [child stdout] [telegram] connected as @TodCode_bot mode=polling rpc=ws://127.0.0.1:25464/hub provider=cline model=z-ai/glm-5.3-flash tools=on
+[2026-08-29T22:40:05.693Z] [child stdout] [telegram] send /clear in a chat to start a fresh RPC session
+[2026-08-29T22:40:05.693Z] [child stdout] [telegram] send /whereami in a chat to get its delivery thread id
+[2026-08-29T22:40:05.693Z] [child stdout] [telegram] use /tools, /yolo, or /cwd <path> to update runtime settings
+[2026-08-29T22:40:05.693Z] [child stdout] [telegram] send /exit in a chat or press Ctrl+C to stop
+[2026-08-30T00:13:57.205Z] [Rotator] SIGTERM received; stopping connector.

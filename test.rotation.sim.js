@@ -66,10 +66,15 @@ function restoreLog() { if (console.log !== origLog) console.log = origLog; }
 
   // ── Scenario 2: key #0 always rejected, key #1 always OK ─────────────────
   // Reset rotation state left parked by scenario 1's 21h full-cooldown wait.
+  // startVerified/scheduleRestart now reconcile with the PERSISTED grid (disk),
+  // so a clean grid must be restored on disk too — just clearing the in-memory
+  // map would re-poison the park with scenario 1's 21h records.
+  m._test.clearParkMonitor();
   m._test.setRestarting(false);
   m._test.setStartPending(false);
   m._test.setLastProbeNoticeAt(0);
   m.blockedCombos.clear();
+  require('fs').rmSync(tmpCooldowns, { force: true });
   outLines.length = 0;
   const started = [];                     // which combos were actually launched
   m._test.setStartOverride((i, mi) => { started.push([i, mi]); });
