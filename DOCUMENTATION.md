@@ -51,8 +51,12 @@ a bad boot is traceable even when stdout is not captured. Provides:
 - `TELEGRAM_BOT_TOKEN_<NAME>` — per-instance bot token; `BOT_USER_ID` is the
   numeric prefix used to filter shared log lines.
 - Regexes: `LIMIT_RE` (rate-limit/quota/gateway signals), `PROVIDER_ERROR_RE`
-  (superset adding invalid key / bad model), `IS_TELEGRAM_RE`,
+  (superset adding invalid key / bad model), `TIMEOUT_RE` (bridge turn
+  timeouts — "The operation timed out.", ETIMEDOUT), `IS_TELEGRAM_RE`,
   `BOT_USER_ID_RE`, `PID_RE`.
+- `TIMEOUT_COOLDOWN_MS` (3 min, `TELEGRAM_TIMEOUT_COOLDOWN_MS`) /
+  `TIMEOUT_ESCALATED_MS` (15 min after `TIMEOUT_ESCALATE_AFTER_STRIKES` = 3
+  consecutive strikes) — timeout policy constants.
 - Paths: cline log dirs, `connector.log`, `agents.pids.json`,
   `agents.state-<NAME>.json`, `agents.cooldowns.json`.
 - `RPC_HUB_PORTS` — one RPC hub port per instance (MANAGER 25463, FSCENE 25464,
@@ -120,6 +124,15 @@ key, explicit `--model`, RPC port, allowed user, system prompt from
   the whole model for model-scoped limits), marks `modelLimitHit`, picks the
   next combo, queues the auto-resume and schedules the rotation restart
   (parking when everything is cooling).
+- `onTimeoutSignal(line)` — runtime path for turn-level timeouts (bridge's
+  "The operation timed out.", which is NOT a quota error). Blocks ONLY the
+  current combo with a SHORT cooldown (3 min; escalated to 15 min after 3
+  consecutive strikes — strikes reset when a turn completes or 30 min pass),
+  then rotates + auto-resumes exactly like `onLimitSignal`. Exists because the
+  bridge's timeout text matches no `LIMIT_RE` pattern — before this, the
+  wrapper retried a timing-out combo forever with no rotation.
+- `clearTimeoutStrikes()` — resets the timeout strike counter after a healthy
+  turn (called from `logs.js` on "Telegram reply completed").
 - `queueResume()` — arms the auto-resume consumed by the next start.
 
 ### `lib/probe.js`
@@ -213,7 +226,9 @@ Log tailing → events. `tailLog()` keeps a per-file byte offset (resetting on
 truncation/rotation) and emits new complete lines; `pollLogs()` runs every
 second over the shared `cline.log` and every per-bot log file. Filtered by
 `IS_TELEGRAM_RE` + `procs.isOurBot()`, then: limit lines → `onTurnDone(false)`
-+ `killIfStaleConnector` + `supervisor.onLimitSignal`; everything else →
++ `killIfStaleConnector` + `supervisor.onLimitSignal`; timeout lines →
+`onTurnDone(false)` + `supervisor.onTimeoutSignal`; "Telegram reply completed"
+→ `supervisor.clearTimeoutStrikes()`; everything else →
 `chat.handleTurnEvent`.
 
 ### `lib/chat.js`
