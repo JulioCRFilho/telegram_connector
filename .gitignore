@@ -3,6 +3,7 @@ agents.pids.json
 agents.pids.json.lock
 agents.pids.json.*.tmp
 agents.state-*.json
+agents.interrupted-*.json
 agents.cooldowns.json
 agents.cooldowns-*.json
 # Env snapshot the wrapper writes at boot (contains bot token + API keys).

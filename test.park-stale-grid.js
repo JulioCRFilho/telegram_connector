@@ -39,14 +39,34 @@ const poisoned = {
   '5:2': { unblockAt: now + 14 * HOUR, blockedAt: now, cooldownMs: 14 * HOUR, reason: 'daily free limit', detail: '' },
   '0:3': { unblockAt: now - 60 * 1000, blockedAt: now, cooldownMs: 0, reason: 'old config (model #3 no longer exists)', detail: '' }, // STALE POISON
   '7:1': { unblockAt: now + 14 * HOUR, blockedAt: now, cooldownMs: 14 * HOUR, reason: 'old config (key #7 no longer exists)', detail: '' },
-  _models_: [0, 1, 2],
+  _models_: [0, 1, 2],  // LEGACY metadata: poison — the file must hold ONLY "k:m" records
 };
 fs.writeFileSync(tmpFile, JSON.stringify(poisoned));
 cooldowns.load();
+t(state.modelLimitHit.size === 0, 'legacy "_models_" metadata is NOT resurrected into modelLimitHit (in-memory only)');
 t(state.blockedCombos.size === 2 && !state.blockedCombos.has('0:3') && !state.blockedCombos.has('7:1'),
   'load() keeps only in-grid records (2) and drops the 2 stale ones');
-t(!JSON.parse(fs.readFileSync(tmpFile, 'utf8'))['0:3'] && !JSON.parse(fs.readFileSync(tmpFile, 'utf8'))['7:1'],
-  'load() healed the persisted file (no stale records left on disk)');
+const healed = JSON.parse(fs.readFileSync(tmpFile, 'utf8'));
+t(!healed['0:3'] && !healed['7:1'] && healed._models_ === undefined,
+  'load() healed the persisted file (no stale records, no "_models_" left on disk)');
+
+// ── 1b) grid helpers: 18 rounds, bounds-checked free check ──────────────────
+t(cooldowns.totalCombos() === 18, 'totalCombos() = 6 keys × 3 models = 18 rounds (derived from config, never stored)');
+t(cooldowns.isComboFree(0, 0) === false, 'isComboFree: blocked combo reports false');
+t(cooldowns.isComboFree(5, 2) === false, 'isComboFree: second blocked combo reports false');
+t(cooldowns.isComboFree(1, 1) === true, 'isComboFree: unblocked combo reports true');
+t(cooldowns.isComboFree(6, 0) === false && cooldowns.isComboFree(0, 3) === false,
+  'isComboFree: out-of-grid slots are never "free"');
+
+// ── 1c) save() must NEVER write non-record keys, even with modelLimitHit set ─
+state.modelLimitHit.add(0);
+state.modelLimitHit.add(1);
+cooldowns.scheduleSave();
+cooldowns.save();
+const afterSave = JSON.parse(fs.readFileSync(tmpFile, 'utf8'));
+t(Object.keys(afterSave).every((k) => /^\d+:\d+$/.test(k)),
+  `save() writes only "k:m" records even when modelLimitHit is set (got: ${Object.keys(afterSave).join(', ')})`);
+state.modelLimitHit.clear();
 
 // ── 2) earliestUnblock/pickNextCombo honor the REAL earliest despite poisons ─
 state.blockedCombos.clear();

@@ -174,7 +174,13 @@ start anyway; runtime detection is the net).
 ### `lib/rotation.js`
 Cooldown-grid logic and combo selection. Grid key `"<keyIdx>:<modelIdx>"` →
 `{unblockAt, blockedAt, cooldownMs, reason, detail}` in `state.blockedCombos`,
-persisted via `lib/cooldowns.js`.
+persisted via `lib/cooldowns.js`. The file holds ONLY `"k:m"` records —
+a model-scoped limit is expressed by blocking all of that model's key records
+(6 keys × 3 models = 18 rounds); there is no `_models_` metadata key (legacy
+occurrences are healed away on load, and `save()` never writes one).
+`state.modelLimitHit` is in-memory only. Consumers must use the helpers
+`gridKeyValid(key)`, `totalCombos()` (= key count × model count, derived from
+live config) and `isComboFree(key, model)` instead of parsing raw JSON.
 **Model capacity priority** (`modelRank`/`modelsByPriority`): models are tried
 best-capacity-first per `config.MODEL_PRIORITY` (default
 `z-ai/glm-5.3-flash` → `deepseek/deepseek-v4-flash` → any), substring-matched
@@ -250,9 +256,22 @@ second over the shared `cline.log` and every per-bot log file. Filtered by
 → `supervisor.clearTimeoutStrikes()`; everything else →
 `chat.handleTurnEvent`.
 
+### `lib/interrupted.js` — paused-task queue
+Persisted FIFO (`agents.interrupted-<INSTANCE>.json`, gitignored) of tasks
+paused by a mid-task user interruption. `push` dedupes identical text, caps at
+5 entries, entries expire after 24h; `pop` returns the oldest. Survives
+wrapper restarts.
+
 ### `lib/chat.js`
 Telegram Bot API messaging + turn UX:
 
+- Another message from the same chat while a turn is active **interrupts the
+  running task**: the in-flight request is paused into `lib/interrupted.js`
+  (⏸ notice), the connector restarts so the NEW message is answered first, and
+  when that turn completes the paused task is re-queued automatically
+  (▶️ notice). Re-sending identical text just resets the ping clock. This
+  replaced the old behavior where follow-ups were ignored and then silently
+  cleared by `onTurnDone`.
 - `sendTelegramMessage(chatId, text)` / `notifyUser(text)` — wrapper-initiated
   notices (best-effort, never throw).
 - `ackQueuedDuringPark(earliestUnblockAt)` — **park-time poller**: while every
