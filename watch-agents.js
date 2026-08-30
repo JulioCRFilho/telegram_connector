@@ -163,11 +163,22 @@ function hasConnectorChild(pid) {
   return r.status === 0 && (r.stdout || '').trim().length > 0;
 }
 
+// Parked wrappers (every key×model combo on cooldown) run WITHOUT a connector
+// by design — the wrapper polls Telegram itself until the grid frees up. The
+// wrapper advertises this via `parkedUntil` (procs.markParked) in the pid
+// registry; a parked instance is healthy, never restart-worthy. The grace
+// window covers the wake race: at wake the flag clears just before the
+// connector spawns, so a health pass landing in between must not kill it.
+const PARK_GRACE_MS = 90 * 1000;
+function isParkedEntry(entry, nowMs = Date.now()) {
+  return Boolean(entry && entry.parkedUntil && entry.parkedUntil > nowMs - PARK_GRACE_MS);
+}
+
 function healthCheckOnce() {
   let data = {};
   try { data = JSON.parse(fs.readFileSync(PIDS_FILE, 'utf8')); } catch (_) { return []; }
   const instances = Object.entries(data)
-    .filter(([, e]) => e && e.wrapperPid && pidAlive(e.wrapperPid))
+    .filter(([, e]) => e && e.wrapperPid && pidAlive(e.wrapperPid) && !isParkedEntry(e))
     .map(([name, e]) => ({ name, pid: e.wrapperPid }));
   const unhealthy = [];
   for (const x of instances) {
@@ -211,4 +222,4 @@ if (require.main === module) {
   setInterval(healthCheckOnce, HEALTH_INTERVAL_MS);
 }
 
-module.exports = { tailFile, stalledTurnMinutes, STALLED_TURN_MIN, HEALTH_INTERVAL_MS };
+module.exports = { tailFile, stalledTurnMinutes, isParkedEntry, PARK_GRACE_MS, STALLED_TURN_MIN, HEALTH_INTERVAL_MS };

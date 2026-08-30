@@ -152,6 +152,8 @@ if (require.main !== module) {
       setCurrentCombo(k, m) { state.curKeyIndex = k; state.curModelIndex = m; },
       setStartOverride(fn) { supervisor._setStartOverride(fn); },
       clearParkMonitor() { supervisor.clearParkMonitor(); },
+      parkRefresh() { supervisor._refreshParkRound(); },
+      isParkActive() { return supervisor._isParkActive(); },
     },
   };
 }

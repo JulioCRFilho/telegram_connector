@@ -114,6 +114,16 @@ key, explicit `--model`, RPC port, allowed user, system prompt from
   auto-resume. This replaced the old recursive `scheduleRestart(…, waitMs,
   true)` parking, which a stale/out-of-grid cooldown record could collapse to a
   30 s re-park busy loop with no connector running (the "agents frozen" bug).
+- `refreshParkRound()` — the **park refresh round**: while parked, the grid is
+  re-consulted every `PARK_REFRESH_INTERVAL_MS` (default 10 m, env
+  `TELEGRAM_PARK_REFRESH_INTERVAL_MS`) instead of blindly sleeping until the
+  quoted unblock. Each round reloads the persisted grid and recomputes the
+  rotation scan: a combo that freed early (record healed, peer cleared it,
+  over-quoted `try again in`) exits the park **immediately** and starts on it;
+  an earliest-unblock that moved earlier by peers re-arms the wake timer; an
+  unchanged grid keeps the current park untouched (no re-arm churn). This is
+  the active safety net behind all-18-cooling — the agents never trust a stale
+  block for hours on end.
 - `startVerified(index, modelIndex)` — runs the **pre-flight probe**
   (`probe.probeCombo`) before every start; `ok:true`/inconclusive → start,
   `ok:false` → `onProbeReject`. Sends the "back online" notice when the start
@@ -370,6 +380,15 @@ no "Task completed|failed" after it. Stalled/degraded instances get a GRACEFUL
 restart (`restart-agent.sh <NAME>`, SIGTERM first). Guarded by a cross-process
 `agents.watch.lock` (O_EXCL + stale-steal). Modes: `node watch-agents.js`
 (daemon loop) or `node watch-agents.js once` (cron-friendly liveness only).
+
+**Parked wrappers are never restarted.** A wrapper parked on a fully-cooled
+grid has no connector child BY DESIGN (it polls Telegram itself), which the
+health check used to misread as "degraded" — restarting parked wrappers every
+10 min and freezing the agents in a park↔restart loop. Wrappers now advertise
+`parkedUntil` in `agents.pids.json` (`procs.markParked`, set by
+`startParkMonitor`, cleared whenever the park machinery goes down) and the
+watcher skips such instances (`isParkedEntry`, with a 90 s grace window so the
+wake→connector-spawn race can't be killed mid-flight).
 Skipped instances with no `agents.env-<NAME>.json` (never booted here). Logs
 to `restart-schedule.log`. Covered by `test.health-check.js`.
 
@@ -422,8 +441,20 @@ re-park loop. Asserts `load()` drops/heals out-of-grid records and that
 `pickNextCombo` / `resolveStartCombo` honor the grid's REAL earliest unblock
 despite poison records.
 
+### `test.watch-park.js`
+Regression test for the park↔restart freeze (watcher health pass restarted
+parked wrappers): `procs.markParked` advertises the park window in
+`agents.pids.json` and `watch-agents.isParkedEntry` (with its 90 s wake-grace)
+correctly treats parked→waking wrappers as healthy, never restart-worthy.
+
+### `test.park-refresh.js`
+Regression test for the park refresh round: with every combo cooling, a fresh
+round over the persisted grid (a) stays parked when the grid is unchanged,
+(b) **exits the park and starts immediately** when a combo frees early, and
+(c) re-arms the wake timer when peers move the earliest unblock earlier.
+
 ### `package.json`
-No dependencies. `npm test` runs all four test files; `npm run watch` starts
+No dependencies. `npm test` runs all twelve test files; `npm run watch` starts
 the auto-heal watcher (`node watch-agents.js`).
 
 Run all with plain `node <file>` (no test framework).
