@@ -7,7 +7,7 @@
     "node": ">=18"
   },
   "scripts": {
-    "test": "node test.rotation.sim.js && node test.park-stale-grid.js && node test.probe.js && node test.pids-race.js",
+    "test": "node test.rotation.sim.js && node test.park-stale-grid.js && node test.probe.js && node test.pids-race.js && node test.task-progress.js",
     "watch": "node watch-agents.js"
   }
 }
