@@ -10,6 +10,14 @@
 //   node watch-agents.js once      single check (cron-friendly), exit code 0/1
 //   node watch-agents.js           loop forever (the watcher daemon)
 //
+// Beyond the 1-minute liveness pass, a HEALTH check runs every 10 minutes and
+// catches the two failure modes liveness cannot see: a wrapper alive whose
+// connector child died (no `cline connect telegram` child), and a stalled
+// turn — the log keeps printing "Still working after N min" but no completion
+// ever lands (observed live with EVOL, 2026-08-30: 18 min without a reply).
+// Stalled/degraded instances get a GRACEFUL restart (SIGTERM first, unlike the
+// forced relaunch used for dead pids) so the rotator can stop cleanly.
+//
 // A cross-process lock (agents.watch.lock, O_EXCL + stale-steal like
 // procs.js) keeps concurrent watchers/cron and manual restarts from double-
 // launching. Logs to restart-schedule.log.
@@ -22,7 +30,10 @@ const PIDS_FILE = path.join(DIR, 'agents.pids.json');
 const LOCK_FILE = path.join(DIR, 'agents.watch.lock');
 const LOG_FILE = path.join(DIR, 'restart-schedule.log');
 const RESTART = path.join(DIR, 'restart-agent.sh');
-const INTERVAL_MS = 60 * 1000;
+const INTERVAL_MS = 60 * 1000;          // liveness pass (dead pid → relaunch)
+const HEALTH_INTERVAL_MS = 10 * 60 * 1000; // deep health pass (stall detection)
+const STALLED_TURN_MIN = 30;            // turn in flight longer than this = stalled
+const STALE_LOG_MIN = 10;               // no log line newer than this = hung
 const STALE_LOCK_MS = 60 * 1000;
 const RESTART_TIMEOUT_MS = 90 * 1000;   // graceful stop waits up to ~30s inside restart-agent.sh
 
@@ -45,14 +56,15 @@ function pidAlive(pid) {
   }
 }
 
-function restartInstance(name) {
+function restartInstance(name, graceful = false) {
   // Skip instances that never booted here (no env file — nothing to relaunch
   // with); restart-agent.sh would abort anyway, but this avoids log spam.
   if (!fs.existsSync(path.join(DIR, `agents.env-${name}.json`))) {
     note(`instance ${name}: no agents.env-${name}.json; skipping (never booted here).`);
     return;
   }
-  const r = spawnSync('bash', [RESTART, name, '--force'], { encoding: 'utf8', timeout: RESTART_TIMEOUT_MS });
+  const args = graceful ? [RESTART, name] : [RESTART, name, '--force'];
+  const r = spawnSync('bash', args, { encoding: 'utf8', timeout: RESTART_TIMEOUT_MS });
   if (r.status === 0) {
     note(`restarted ${name}: ${(r.stdout || '').trim() || 'ok'}`);
   } else {
@@ -100,12 +112,103 @@ function checkOnce() {
   return dead;
 }
 
-const mode = process.argv[2] || 'loop';
-if (mode === 'once') {
-  const dead = checkOnce();
-  process.exit(dead.length ? 0 : 0);   // check-only: never fail the cron
+// --- health check (every HEALTH_INTERVAL_MS) --------------------------------
+// Catches degraded-but-alive instances the liveness pass cannot see:
+//   1. wrapper pid alive but its connector child is gone;
+//   2. a turn stuck in flight — the wrapper log's "Still working after N min"
+//      counter keeps climbing (or the log went quiet mid-turn) with no
+//      "Task completed|failed" ever landing.
+
+// Read only the last `bytes` of a (potentially huge) wrapper log.
+function tailFile(file, bytes = 16 * 1024) {
+  try {
+    const fd = fs.openSync(file, 'r');
+    try {
+      const size = fs.fstatSync(fd).size;
+      const start = Math.max(0, size - bytes);
+      const buf = Buffer.alloc(size - start);
+      fs.readSync(fd, buf, 0, buf.length, start);
+      return buf.toString('utf8');
+    } finally { fs.closeSync(fd); }
+  } catch (_) { return ''; }
 }
 
-note(`watcher started (check every ${INTERVAL_MS / 1000}s).`);
-checkOnce();
-setInterval(checkOnce, INTERVAL_MS);
+// Minutes the in-flight turn has been running, or 0 if no turn is stuck.
+// `nowMs` is injectable for tests. A turn counts as in-flight while the most
+// recent turn signal is a "Still working after N min" line; any "Task
+// completed/failed" after it clears the state. The effective age is the
+// counter N — or the wall-clock age of the line itself if the wrapper hung
+// and stopped logging (whichever is larger).
+function stalledTurnMinutes(tail, nowMs = Date.now()) {
+  let inFlight = null; // { minutes, lineMs }
+  for (const line of tail.split('\n')) {
+    const m = line.match(/Still working after (\d+) min/);
+    if (m) {
+      const t = line.match(/\[(\d{4}-\d{2}-\d{2}T[^\]]+)\]/);
+      inFlight = { minutes: parseInt(m[1], 10), lineMs: t ? Date.parse(t[1]) : NaN };
+    } else if (/\[Turn\] Task (completed|failed)/.test(line)) {
+      inFlight = null;
+    }
+  }
+  if (!inFlight) return 0;
+  const wallClockMin = Number.isFinite(inFlight.lineMs)
+    ? Math.floor((nowMs - inFlight.lineMs) / 60000)
+    : 0;
+  return Math.max(inFlight.minutes, wallClockMin);
+}
+
+// Direct child (`cline connect telegram`) still alive under the wrapper pid?
+function hasConnectorChild(pid) {
+  const r = spawnSync('pgrep', ['-P', String(pid)], { encoding: 'utf8' });
+  return r.status === 0 && (r.stdout || '').trim().length > 0;
+}
+
+function healthCheckOnce() {
+  let data = {};
+  try { data = JSON.parse(fs.readFileSync(PIDS_FILE, 'utf8')); } catch (_) { return []; }
+  const instances = Object.entries(data)
+    .filter(([, e]) => e && e.wrapperPid && pidAlive(e.wrapperPid))
+    .map(([name, e]) => ({ name, pid: e.wrapperPid }));
+  const unhealthy = [];
+  for (const x of instances) {
+    if (!hasConnectorChild(x.pid)) {
+      note(`health check: ${x.name} (pid ${x.pid}) has no connector child; restarting.`);
+      unhealthy.push(x);
+      continue;
+    }
+    const stalled = stalledTurnMinutes(tailFile(path.join(DIR, `wrapper-${x.name}.out`)));
+    if (stalled >= STALLED_TURN_MIN) {
+      note(`health check: ${x.name} (pid ${x.pid}) turn stalled for ${stalled} min; restarting.`);
+      unhealthy.push(x);
+    }
+  }
+  if (unhealthy.length === 0) return [];
+  if (!acquireLock()) {
+    note('another watcher/manual restart is running; skipping health cycle.');
+    return unhealthy;
+  }
+  try {
+    for (const x of unhealthy) restartInstance(x.name, true); // graceful: SIGTERM first
+  } finally {
+    releaseLock();
+  }
+  return unhealthy;
+}
+
+// Daemon entry point — only when run directly (require.main guard lets the
+// regression test import the health helpers without starting intervals).
+if (require.main === module) {
+  const mode = process.argv[2] || 'loop';
+  if (mode === 'once') {
+    const dead = checkOnce();
+    process.exit(dead.length ? 0 : 0);   // check-only: never fail the cron
+  }
+
+  note(`watcher started (liveness every ${INTERVAL_MS / 1000}s, health every ${HEALTH_INTERVAL_MS / 60000}min).`);
+  checkOnce();
+  setInterval(checkOnce, INTERVAL_MS);
+  setTimeout(() => healthCheckOnce(), 60 * 1000);
+  setInterval(healthCheckOnce, HEALTH_INTERVAL_MS);
+}
+
+module.exports = { tailFile, stalledTurnMinutes, STALLED_TURN_MIN, HEALTH_INTERVAL_MS };

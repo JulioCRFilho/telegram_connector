@@ -321,12 +321,19 @@ A `ps eww` fallback is kept only for wrappers that predate the env-file code.
 
 ### `watch-agents.js`
 **Auto-heal watcher** (the implementation of AGENTS.md's "keep them online"):
-every 60 s it reads `agents.pids.json` and, for each instance whose wrapper pid
-is dead or no longer runs `main.js <NAME>`, relaunches it via
-`restart-agent.sh <NAME> --force`. Guarded by a cross-process `agents.watch.lock`
-(O_EXCL + stale-steal). Modes: `node watch-agents.js` (daemon loop) or
-`node watch-agents.js once` (cron-friendly). Skipped instances with no
-`agents.env-<NAME>.json` (never booted here). Logs to `restart-schedule.log`.
+a liveness pass every 60 s reads `agents.pids.json` and, for each instance
+whose wrapper pid is dead or no longer runs `main.js <NAME>`, relaunches it via
+`restart-agent.sh <NAME> --force`. A **health pass every 10 min** catches the
+degraded-but-alive cases liveness cannot see: wrapper alive but its connector
+child is gone (`pgrep -P`), or a turn stalled in flight — the wrapper log's
+"Still working after N min" counter (or the wall-clock age of that line, when
+the wrapper hung and stopped logging) crosses `STALLED_TURN_MIN` (30 min) with
+no "Task completed|failed" after it. Stalled/degraded instances get a GRACEFUL
+restart (`restart-agent.sh <NAME>`, SIGTERM first). Guarded by a cross-process
+`agents.watch.lock` (O_EXCL + stale-steal). Modes: `node watch-agents.js`
+(daemon loop) or `node watch-agents.js once` (cron-friendly liveness only).
+Skipped instances with no `agents.env-<NAME>.json` (never booted here). Logs
+to `restart-schedule.log`. Covered by `test.health-check.js`.
 
 ### `restart-evol-when-idle.sh`
 Deferred restart for EVOL: polls every 30 s until `agents.state-EVOL.json`
