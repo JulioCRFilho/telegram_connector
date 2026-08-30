@@ -1,0 +1,13 @@
+{
+  "name": "telegram-connector",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Wrapper that keeps cline telegram connectors alive through a key×model rotation grid (auto-resume, cooldown persistence, pre-flight probing).",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node test.rotation.sim.js && node test.park-stale-grid.js && node test.probe.js && node test.pids-race.js",
+    "watch": "node watch-agents.js"
+  }
+}

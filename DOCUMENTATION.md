@@ -18,6 +18,10 @@ Each running instance is identified by a **NAME** passed as argv[2]
 The only runnable file. Two modes:
 
 - **Run directly** (`node main.js <NAME>`): boots the wrapper lifecycle —
+  - **Persists its full `TELEGRAM_*` environment** to `agents.env-<NAME>.json`
+    (mode 0600) BEFORE anything can exit on a validation error — `restart-agent.sh`
+    and the auto-heal watcher rebuild an exact relaunch from it, even from a dead
+    wrapper, without the fragile `ps eww` parsing.
   - SIGINT/SIGTERM handlers: mark shutdown, remove the pid entry, stop the
     connector child (waiting for it to actually die) before exiting.
   - **Duplicate-instance guard**: refuses to start if another live wrapper for
@@ -38,8 +42,10 @@ The only runnable file. Two modes:
 
 ### `lib/config.js`
 Central configuration. **All values come from environment variables** (nothing
-embedded). Validates on load and `process.exit(1)` if the bot token, API keys,
-or model list are missing. Provides:
+embedded). Validates on load and exits if the bot token, API keys, or model list
+are missing — the error names the REAL variable (`TELEGRAM_BOT_TOKEN_<NAME>` for
+instance tokens, not the generic one) and is also written to `connector.log` so
+a bad boot is traceable even when stdout is not captured. Provides:
 
 - `API_KEYS` / `MODELS` — the rotation grid (comma/semicolon/space separated).
 - `TELEGRAM_BOT_TOKEN_<NAME>` — per-instance bot token; `BOT_USER_ID` is the
@@ -59,16 +65,19 @@ or model list are missing. Provides:
 
 ### `lib/state.js`
 The single mutable state object shared by all modules (avoids circular
-requires): live child process + pid, retired-pid set (`knownPids`), current
+requires): live child process + pid, retired-pid memo (`knownPids`, map of
+pid → first-seen time, pruned in `lib/procs.js`), current
 key/model indices, `blockedCombos` Map (`"<keyIdx>:<modelIdx>"` → cooldown
 record), `modelLimitHit` Set, start-window guards (`startPending`,
 `pendingRotation`, `restarting`, `restartFromRotation`, `pendingResume`),
-`shuttingDown`, last seen chat id, last unanswered user message, and
+`shuttingDown`, last seen chat id, last unanswered user message,
+`resumeAttempts` (auto-resume retry budget for non-provider failures), and
 dedupe/throttle timestamps for limit signals and probe notices.
 
 ### `lib/log.js`
 One function: timestamped line appended to `connector.log` **and** printed to
-stdout, so diagnostics are never lost when stdout is redirected.
+stdout, so diagnostics are never lost when stdout is redirected. Connector.log
+is rotated once past 5 MB (a single `.1` backup) so it can't grow forever.
 
 ### `lib/supervisor.js`
 The rotator core — builds the `cline connect telegram` argv (bot token, API
@@ -76,16 +85,20 @@ key, explicit `--model`, RPC port, allowed user, system prompt from
 `system_prompt.md`), spawns and monitors the connector:
 
 - `buildArgs()` — argv construction; `--model` is always passed explicitly.
+- Launched-command echo **redacts secrets**: the bot token and every API key
+  are masked (`12…456`) in `connector.log` / `wrapper-*.out` — those logs live
+  indefinitely and previously exposed the full credential set on every start.
 - `stopCurrent(onStopped)` — kills the connector **and its whole descendant
   tree** (the cline shim spawns the real binary as a child): SIGTERM to every
   pid children-first, SIGKILL escalation after 3 s, absolute safety timeout.
   Calls back only when the child is actually gone.
-- `scheduleRestart(index, modelIndex, delay, afterCooldown)` — stops the old
+- `scheduleRestart(index, modelIndex, delay)` — stops the old
   connector, purges stale daemons, **reconciles the cooldown grid from disk**
   (`cooldowns.load()`) and re-validates the target right before starting
   (`resolveStartCombo`). If a restart/probe is already in flight it only queues
   `pendingRotation`; if the target is still blocked it hands off to the park
-  monitor instead of re-arming a fragile long setTimeout.
+  monitor instead of re-arming a fragile long setTimeout. (The old `afterCooldown`
+  parameter was removed — every cooldown path now goes through `parkOnCooldown`.)
 - `parkOnCooldown(key, model, waitMs)` / `startParkMonitor()` — when EVERY
   key×model combo is cooling down: stop the connector, purge stale daemons, and
   arm the **park monitor** — a wake timer at the grid's REAL earliest unblock
@@ -182,6 +195,8 @@ Process-tree attribution, stale-connector hygiene, and the pid registry:
   belongs to this bot: `botUserId` field first, then pid ∈ our process tree,
   then "is this a stale connector running our bot token". Prevents
   cross-reaction between instances sharing `~/.cline/data/logs/cline.log`.
+  The retired-pid memo is **bounded** (pruned past 512 entries or 1 h old) so
+  it can't grow across hundreds of restarts.
 - `purgeStale()` — SIGKILLs only **orphaned** connectors (ppid=1) matching this
   exact bot token; live-owner matches are left alone (this guard is what ended
   the two-wrappers-killing-each-other restart loop).
@@ -210,7 +225,8 @@ Telegram Bot API messaging + turn UX:
   key×model combo is on cooldown no connector runs, so the wrapper polls
   Telegram `getUpdates` itself, answers each new user message with a "⏳ queued
   until ~HH:MM UTC" notice and persists it (`lastmessage.save`) so the
-  auto-resume retries it the moment quota frees.
+  auto-resume retries it the moment quota frees. In-flight guard (one poll at a
+  time — no concurrent getUpdates/409s) + 15 s fetch timeout.
 - **Turn machinery**: a user message that gets no reply within 3 min is
   acknowledged ("🛠️ On it — …") with the live key/model and `gridSummary()`;
   while it runs, progress pings every 5 min (cap 12 ≈ 1 h) report real task-list
@@ -219,9 +235,13 @@ Telegram Bot API messaging + turn UX:
   acked.
 - `/keys`, `/keymap`, `/cooldowns`, `/combo` — wrapper-level command: replies
   with the full persisted cooldown grid (`rotation.gridStatus()`).
+- `/status` — wrapper-level command: replies with the instance's live snapshot
+  (name, bot handle, current key/model, wrapper/connector pids, uptime, grid).
 - `handleTurnEvent(line)` — maps connector log messages to turn events
   (received / completed / failed / RPC session lifecycle); captures
   `textPreview` as `lastUserMessage` and persists it via `lastmessage`.
+  Log lines are **parsed as whole JSON objects** (`parseLogLine`), so preview
+  text with quotes/escapes decodes correctly for the auto-resume.
 - `onTurnDone(ok)` — on success clears the unanswered message (a failed turn
   keeps it for the auto-resume to retry).
 
@@ -254,6 +274,12 @@ requests and replies). `ws` is loaded from the cline install by absolute path.
   combo is blocked (rate-limit cooldown, or 1 h for bad key/model; model-scoped
   limits block every key on the model) and the resume is re-queued with the
   next combo — looping until a working key/model answers.
+- **Non-provider failures are capped** (`RESUME_MAX_FAILURES = 2`): a resumed
+  run that fails for hub/workspace/agent reasons isn't going to succeed by
+  retrying on every rotation — after 2 tries the persisted message is dropped
+  and the user gets one final "send a new message" notice instead of endless
+  "couldn't auto-resume" spam. The budget resets on any fresh user message or
+  a successful turn.
 
 ### `lib/lastmessage.js`
 Persists the last **unanswered** user message per instance
@@ -266,11 +292,26 @@ are discarded.
 ## Shell scripts
 
 ### `restart-agent.sh`
-Graceful restart of one instance: reads the live wrapper pid from
-`agents.pids.json`, verifies it really is that wrapper, **captures its
-`TELEGRAM_*` environment before killing it**, SIGTERMs it (waits up to 30 s),
-then relaunches `node main.js <NAME>` detached with the identical environment,
-appending to `wrapper-<NAME>.out`.
+Restart one instance in two modes:
+- `restart-agent.sh <NAME>` — graceful: verifies the live wrapper pid in
+  `agents.pids.json`, SIGTERMs it (waits up to 30 s), then relaunches.
+- `restart-agent.sh <NAME> --force` — forced: for a DEAD wrapper (used by the
+  auto-heal watcher); skips the "wrapper must be alive" checks.
+
+The relaunch environment is restored from **`agents.env-<NAME>.json`** — the
+snapshot `main.js` writes at every boot (mode 0600) with the full `TELEGRAM_*`
+env. This replaced `ps eww` parsing, which mangles env values containing
+spaces (e.g. `TELEGRAM_API_KEYS="sk-a, sk-b"`) and cannot read a dead process.
+A `ps eww` fallback is kept only for wrappers that predate the env-file code.
+
+### `watch-agents.js`
+**Auto-heal watcher** (the implementation of AGENTS.md's "keep them online"):
+every 60 s it reads `agents.pids.json` and, for each instance whose wrapper pid
+is dead or no longer runs `main.js <NAME>`, relaunches it via
+`restart-agent.sh <NAME> --force`. Guarded by a cross-process `agents.watch.lock`
+(O_EXCL + stale-steal). Modes: `node watch-agents.js` (daemon loop) or
+`node watch-agents.js once` (cron-friendly). Skipped instances with no
+`agents.env-<NAME>.json` (never booted here). Logs to `restart-schedule.log`.
 
 ### `restart-evol-when-idle.sh`
 Deferred restart for EVOL: polls every 30 s until `agents.state-EVOL.json`
@@ -321,6 +362,10 @@ re-park loop. Asserts `load()` drops/heals out-of-grid records and that
 `pickNextCombo` / `resolveStartCombo` honor the grid's REAL earliest unblock
 despite poison records.
 
+### `package.json`
+No dependencies. `npm test` runs all four test files; `npm run watch` starts
+the auto-heal watcher (`node watch-agents.js`).
+
 Run all with plain `node <file>` (no test framework).
 
 ---
@@ -330,9 +375,11 @@ Run all with plain `node <file>` (no test framework).
 | File | Purpose |
 |---|---|
 | `agents.pids.json` | Registry of live wrapper instances (`NAME` → `{wrapperPid, botUserId, hubPort}`), guarded by `agents.pids.json.lock` + atomic temp-file writes. |
+| `agents.env-<NAME>.json` | Per-instance `TELEGRAM_*` env snapshot written at boot (mode 0600) — restart-agent.sh / watch-agents.js rebuild exact relaunches from it. |
 | `agents.cooldowns.json` | Persisted key×model cooldown grid (shared; overridable via `TELEGRAM_COOLDOWNS_FILE`). |
 | `agents.state-<NAME>.json` | Per-instance last unanswered user message (auto-resume). |
-| `connector.log` | Wrapper diagnostics (from `lib/log.js`). |
+| `agents.watch.lock` | Cross-process lock for the auto-heal watcher (O_EXCL + stale-steal). |
+| `connector.log` | Wrapper diagnostics (from `lib/log.js`); rotated once past 5 MB. |
 | `wrapper-<NAME>.out` | stdout/stderr of each detached wrapper process. |
-| `restart-schedule.log` | Log of the deferred-restart watcher runs. |
+| `restart-schedule.log` | Log of the watcher / deferred-restart runs. |
 

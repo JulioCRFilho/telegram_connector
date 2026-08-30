@@ -24,6 +24,26 @@
 // Run:  node main.js <NAME>   (e.g. `node main.js MANAGER`).
 // ─────────────────────────────────────────────────────────────────────────────
 // Header comment documents boot and the config env; no runtime import here.
+// ─────────────────────────────────────────────────────────────────────────────
+if (require.main === module) {
+  // Persist this instance's full TELEGRAM_* environment BEFORE anything can
+  // exit on a validation error. restart-agent.sh (and the auto-heal watcher)
+  // rebuild an exact relaunch from this file even when the wrapper is dead —
+  // and it handles values with spaces, which `ps eww` parsing mangles.
+  try {
+    const fs = require('fs');
+    const env = {};
+    for (const [k, v] of Object.entries(process.env)) {
+      if (k.startsWith('TELEGRAM_')) env[k] = v;
+    }
+    fs.writeFileSync(
+      require('path').join(__dirname, `agents.env-${process.argv[2] || 'DEFAULT'}.json`),
+      JSON.stringify(env, null, 2) + '\n',
+      { mode: 0o600 }          // file contains the bot token + API keys — owner-only
+    );
+  } catch (_) { }
+}
+
 const config = require('./lib/config');        // validates env on load
 const log = require('./lib/log');
 const state = require('./lib/state');

@@ -1,8 +1,14 @@
+# Runtime state — none of these belong in git.
 agents.pids.json
 agents.pids.json.lock
 agents.pids.json.*.tmp
 agents.state-*.json
+agents.cooldowns.json
 agents.cooldowns-*.json
+# Env snapshot the wrapper writes at boot (contains bot token + API keys).
+agents.env-*.json
+agents.watch.lock
+.env-*
 *.log
 *.out
 system_prompt.md
