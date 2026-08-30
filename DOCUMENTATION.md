@@ -175,6 +175,12 @@ start anyway; runtime detection is the net).
 Cooldown-grid logic and combo selection. Grid key `"<keyIdx>:<modelIdx>"` →
 `{unblockAt, blockedAt, cooldownMs, reason, detail}` in `state.blockedCombos`,
 persisted via `lib/cooldowns.js`.
+**Model capacity priority** (`modelRank`/`modelsByPriority`): models are tried
+best-capacity-first per `config.MODEL_PRIORITY` (default
+`z-ai/glm-5.3-flash` → `deepseek/deepseek-v4-flash` → any), substring-matched
+so id variants still rank. Both runtime rotation (`scanFromCurrent`) and boot
+selection (`pickNextComboFromStart`) follow this order — when a priority
+model's quota recovers, rotation climbs back up the ladder.
 
 - `parseCooldownMs(line)` — extracts "Try again in 7h 3m" / "…after 5h" /
   "…in 30m" → ms (0 when absent).

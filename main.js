@@ -136,6 +136,9 @@ if (require.main !== module) {
     probeBlockAt: rotation.probeBlockAt,
     comboUnblockAt: rotation.comboUnblockAt,
     recommendCombo: rotation.recommendCombo,
+    pickNextCombo: rotation.pickNextCombo,
+    modelRank: rotation.modelRank,
+    modelsByPriority: rotation.modelsByPriority,
     gridStatus: rotation.gridStatus,
     cooldownsFile: config.COOLDOWNS_FILE,
     _cooldowns: cooldowns,                      // test seam: save/load round-trip
