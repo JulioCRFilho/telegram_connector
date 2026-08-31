@@ -227,6 +227,18 @@ model's quota recovers, rotation climbs back up the ladder.
 Persistence of the cooldown grid to `agents.cooldowns.json`. Daily-limit blocks
 last up to ~24 h, so an in-memory grid would forget them on every restart.
 
+**Limit-scale handling** — a provider 429 is classified by its quoted window:
+- **Short (≤1h quoted, or unquoted → 15m default): rolling quota.** Block only
+  the exact (key, model) that failed, park, and auto-retry the same message at
+  the earliest unblock. Sibling keys on the model stay live.
+- **Long (>1h quoted, e.g. "Try again in 21h 33m"): daily-model limit.** The
+  quota is effectively model/account-wide — live logs show the *same* ~21h
+  window reappearing on every key of the model. Block the WHOLE model (all its
+  key records, so the grid keeps all 18 rounds) so rotation jumps to the next
+  model instead of churning keys inside the exhausted one. If every model is
+  at a daily limit, park with the user's message **queued** (never dropped) —
+  it auto-retries at the earliest unblock.
+
 - `gridKeyValid(recordKey)` — bounds-check a persisted `"k:m"` record against
   the CURRENT key/model lists; stale out-of-grid records (from a config change)
   are dropped on load AND never written on save.
@@ -359,9 +371,12 @@ requests and replies). `ws` is loaded from the cline install by absolute path.
   the user's last message verbatim when no task list exists) via
   `session.send_input`, awaits the result, and reports it to the user.
 - **Auto-chain**: if the resumed run itself fails with a provider error, the
-  exact key×model combo is blocked (rate-limit cooldown, or 1 h for bad
-  key/model — never widened to sibling keys) and the resume is re-queued with
-  the next combo — looping until a working key/model answers.
+  combo is blocked according to the limit-scale rules above (short window →
+  that combo + park-and-retry; long window → the whole model, then rotate to
+  the next model) and the resume is re-queued with the next combo — looping
+  until a working key/model answers. The user's message is **never dropped by
+  a rate limit**: if every model is at a daily limit we park and it auto-retries
+  at the earliest unblock.
 - **Non-provider failures are capped** (`RESUME_MAX_FAILURES = 2`): a resumed
   run that fails for hub/workspace/agent reasons isn't going to succeed by
   retrying on every rotation — after 2 tries the persisted message is dropped

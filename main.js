@@ -126,6 +126,7 @@ if (require.main !== module) {
     probeCombo: probe.probeCombo,
     startVerified: supervisor.startVerified,
     onProbeReject: supervisor.onProbeReject,
+    onLimitSignal: supervisor.onLimitSignal,
     onTimeoutSignal: supervisor.onTimeoutSignal,
     clearTimeoutStrikes: supervisor.clearTimeoutStrikes,
     getTimeoutStrikes: supervisor._getTimeoutStrikes,
@@ -139,9 +140,13 @@ if (require.main !== module) {
     pickNextCombo: rotation.pickNextCombo,
     modelRank: rotation.modelRank,
     modelsByPriority: rotation.modelsByPriority,
+    blockModel: rotation.blockModel,
+    isShortQuotedWindow: rotation.isShortQuotedWindow,
+    isLongQuotedWindow: rotation.isLongQuotedWindow,
     gridStatus: rotation.gridStatus,
     cooldownsFile: config.COOLDOWNS_FILE,
     _cooldowns: cooldowns,                      // test seam: save/load round-trip
+    stateRef: state,                            // test seam: lastUserMessage / counters
     PROBE_ENABLED: probe.PROBE_ENABLED,
     // Test-only controls: reset rotation state between simulated scenarios.
     _test: {
