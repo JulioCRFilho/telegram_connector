@@ -12,4 +12,3 @@ agents.watch.lock
 .env-*
 *.log
 *.out
-system_prompt.md
