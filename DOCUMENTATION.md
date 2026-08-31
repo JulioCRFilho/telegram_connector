@@ -286,6 +286,7 @@ What the user sees, per event:
 |---|---|
 | Task accepted | `Got it — working on it now. I'll send the result here as soon as it's done.` (one line; no key/model/grid) |
 | Progress tick | `Quick update: 3 of 8 tasks done.` — sent ONLY when the task-list count advanced since the last message (silent otherwise, capped) |
+| Health check (every 10 min of working) | `🩺 Health check — 20 min in, still on it (3/8 tasks done). connector alive.` — on the clock, independent of task-list movement; honestly reports `reconnecting in the background` while the connector restarts (`TELEGRAM_HEALTH_INTERVAL_MS` override) |
 | Provider rate-limited | `⚠️ The AI provider is rate-limited right now (frees up ~HH:MM UTC). Your request is queued — I'll start automatically as soon as capacity is back.` |
 | Probe rejects a combo | `⚠️ <reason> was rejected — trying another one. Your work resumes automatically…` (throttled so a sweep over dead combos doesn't spam) |
 | Everything cooling | `⚠️ All AI providers are unavailable right now (next free ~HH:MM UTC). I'll keep checking automatically…` |
