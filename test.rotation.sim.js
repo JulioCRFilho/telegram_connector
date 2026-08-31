@@ -60,7 +60,10 @@ function restoreLog() { if (console.log !== origLog) console.log = origLog; }
   const logS1 = outLines.join('\n');
   t(m.blockedCombos.size === 4, 'all 4 key×model combos got blocked by probe failures');
   t(/All 2×2 combos unavailable/.test(logS1), 'full-cooldown park engaged');
-  t(/Blocked ALL .* keys on model #0 .* model-scoped limit/.test(logS1), 'model-scoped limit blocked every key of the model at once');
+  // Per-combo blocking: even though the 429 text names the model, each probe
+  // failure blocks ONLY its own (key, model) pair — never the sibling keys.
+  t(!/Blocked ALL .* keys/.test(logS1), 'a 429 on one key NEVER widens to block sibling keys');
+  t(/Blocked key #0 \+ model #0/.test(logS1) && /Blocked key #1 \+ model #0/.test(logS1), 'each key was blocked individually as it was probed and rejected');
   const s1rec = m.blockedCombos.get('0:0');
   t(s1rec && Math.abs(s1rec.cooldownMs - (21 * 60 + 2) * 60 * 1000) < 5 * 60 * 1000, 'quoted 21h 2m cooldown persisted on the blocked combo');
   const startsS1 = (logS1.match(/Starting connector/g) || []).length;

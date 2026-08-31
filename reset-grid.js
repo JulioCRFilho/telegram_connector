@@ -23,6 +23,9 @@ try {
 } catch (_) { /* missing/corrupt file → nothing to count */ }
 fs.writeFileSync(cooldownsFile, '{}\n');
 console.log(`♻️  Cleared ${cleared} cooldown record(s) → ${cooldownsFile}`);
+console.log('⚠️  This clears OUR records only — it cannot restore provider quota. If a');
+console.log('    daily free limit is truly still in effect, the next API call gets a real');
+console.log('    429 and the combo re-blocks with the provider\'s own "try again in" time.');
 
 let nudged = 0;
 try {

@@ -128,13 +128,15 @@ key, explicit `--model`, RPC port, allowed user, system prompt from
   (`probe.probeCombo`) before every start; `ok:true`/inconclusive → start,
   `ok:false` → `onProbeReject`. Sends the "back online" notice when the start
   follows a rotation/probe rejection.
-- `onProbeReject()` — blocks the rejected combo (all keys of the model when the
-  failure is model-scoped), then loops a full grid scan
+- `onProbeReject()` — blocks ONLY the rejected (key, model) combo (a 429 never
+  widens to sibling keys — the daily limit is per API key), then loops a full
+  grid scan
   (`pickNextComboFromStart`) probing combo after combo; when all are dead it
   notifies the user and parks until the earliest frees. Notices are throttled.
 - `onLimitSignal(line)` — runtime path when a rate-limit line appears in cline's
-  logs (deduped within 5 s): parses the quoted cooldown, blocks the combo (or
-  the whole model for model-scoped limits), marks `modelLimitHit`, picks the
+  logs (deduped within 5 s): parses the quoted cooldown and blocks exactly the
+  current key×model combo (never the whole model), marks `modelLimitHit`
+  (informational), picks the
   next combo, queues the auto-resume and schedules the rotation restart
   (parking when everything is cooling).
 - `onTimeoutSignal(line)` — runtime path for turn-level timeouts (bridge's
@@ -184,9 +186,11 @@ start anyway; runtime detection is the net).
 ### `lib/rotation.js`
 Cooldown-grid logic and combo selection. Grid key `"<keyIdx>:<modelIdx>"` →
 `{unblockAt, blockedAt, cooldownMs, reason, detail}` in `state.blockedCombos`,
-persisted via `lib/cooldowns.js`. The file holds ONLY `"k:m"` records —
-a model-scoped limit is expressed by blocking all of that model's key records
-(6 keys × 3 models = 18 rounds); there is no `_models_` metadata key (legacy
+persisted via `lib/cooldowns.js`. The file holds ONLY `"k:m"` records, and
+blocks are strictly PER COMBO: a key's 429 blocks only its own pair, never
+its sibling keys (the daily free limit is enforced per API key — that is why
+key rotation exists). 6 keys × 3 models = 18 rounds; there is no `_models_`
+metadata key (legacy
 occurrences are healed away on load, and `save()` never writes one).
 `state.modelLimitHit` is in-memory only. Consumers must use the helpers
 `gridKeyValid(key)`, `totalCombos()` (= key count × model count, derived from
@@ -354,9 +358,9 @@ requests and replies). `ws` is loaded from the cline install by absolute path.
   the user's last message verbatim when no task list exists) via
   `session.send_input`, awaits the result, and reports it to the user.
 - **Auto-chain**: if the resumed run itself fails with a provider error, the
-  combo is blocked (rate-limit cooldown, or 1 h for bad key/model; model-scoped
-  limits block every key on the model) and the resume is re-queued with the
-  next combo — looping until a working key/model answers.
+  exact key×model combo is blocked (rate-limit cooldown, or 1 h for bad
+  key/model — never widened to sibling keys) and the resume is re-queued with
+  the next combo — looping until a working key/model answers.
 - **Non-provider failures are capped** (`RESUME_MAX_FAILURES = 2`): a resumed
   run that fails for hub/workspace/agent reasons isn't going to succeed by
   retrying on every rotation — after 2 tries the persisted message is dropped
