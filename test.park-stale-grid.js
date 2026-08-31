@@ -17,6 +17,7 @@ process.env.TELEGRAM_AVAILABLE_MODELS = 'model-a,model-b,model-c'; // 3 models
 // Never touch the live repo grid.
 const tmpFile = require('path').join(require('os').tmpdir(), `cooldowns-${TEST_PROJECT}.json`);
 process.env.TELEGRAM_COOLDOWNS_FILE = tmpFile;
+process.env.TELEGRAM_STATE_FILE = require('path').join(require('os').tmpdir(), 'state-park-stale-grid-' + Date.now() + '.json');
 const fs = require('fs');
 fs.rmSync(tmpFile, { force: true });
 

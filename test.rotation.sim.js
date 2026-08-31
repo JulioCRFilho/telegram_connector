@@ -15,6 +15,7 @@ process.env.TELEGRAM_RESTART_DELAY_MS = '50';
 // probe stays on cline's own client (spawn-based).
 process.env.TELEGRAM_PROBE_HTTP = '1';
 process.env.TELEGRAM_API_BASE = 'https://mock-provider.test';
+process.env.TELEGRAM_STATE_FILE = require('path').join(require('os').tmpdir(), 'state-rotation-sim-' + Date.now() + '.json');
 process.env.TELEGRAM_TASKS_DIR = require('os').tmpdir();
 process.env.TELEGRAM_ALLOWED_USER_ID = '123456789'; // so notifyUser actually emits + logs
 process.env.PATH = '';                    // any spawn attempt fails harmlessly (ENOENT)

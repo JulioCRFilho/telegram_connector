@@ -16,6 +16,7 @@ process.env[`TELEGRAM_BOT_TOKEN_${TEST_PROJECT}`] = '123456789:TEST';
 process.argv.push(TEST_PROJECT);
 process.env.TELEGRAM_API_KEYS = 'sk-int-a';
 process.env.TELEGRAM_AVAILABLE_MODELS = 'z-ai/glm-5.3-flash';
+process.env.TELEGRAM_STATE_FILE = require('path').join(require('os').tmpdir(), 'state-test.interrupt-' + Date.now() + '.json');
 process.env.TELEGRAM_TASKS_DIR = os.tmpdir();
 process.env.TELEGRAM_ALLOWED_USER_ID = '123456789';
 process.env.TELEGRAM_COOLDOWNS_FILE = path.join(os.tmpdir(), 'cooldowns-INTERRUPT.json');

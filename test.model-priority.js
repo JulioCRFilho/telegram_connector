@@ -19,6 +19,7 @@ process.env.TELEGRAM_MODEL_PRIORITY = 'z-ai/glm-5.3-flash, deepseek/deepseek-v4-
 process.env.TELEGRAM_RESTART_DELAY_MS = '30';
 process.env.TELEGRAM_PROBE_HTTP = '1';
 process.env.TELEGRAM_API_BASE = 'https://mock-provider.test';
+process.env.TELEGRAM_STATE_FILE = require('path').join(require('os').tmpdir(), 'state-test.model-priority-' + Date.now() + '.json');
 process.env.TELEGRAM_TASKS_DIR = require('os').tmpdir();
 process.env.TELEGRAM_ALLOWED_USER_ID = '123456789';
 process.env.PATH = '';

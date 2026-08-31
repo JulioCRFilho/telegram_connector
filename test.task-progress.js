@@ -10,6 +10,7 @@
 // list), (2) prefer files whose NAME looks like a task list (tasks/todo/…)
 // over arbitrary docs, (3) keep the explicit TELEGRAM_TASKS_FILE trusted.
 // Run:  node test.task-progress.js
+process.env.TELEGRAM_STATE_FILE = require('path').join(require('os').tmpdir(), 'state-task-progress-' + Date.now() + '.json');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
