@@ -49,7 +49,7 @@ assert.strictEqual(stalledTurnMinutes('', NOW), 0, 'empty tail must not be flagg
 
 // 6. Threshold + tailFile sanity: real tail reading works and default
 //    threshold is 30 min, interval is 10 min.
-assert.strictEqual(STALLED_TURN_MIN, 30);
+assert.strictEqual(STALLED_TURN_MIN, 90);
 assert.strictEqual(typeof tailFile(__filename), 'string');
 assert.ok(tailFile(__filename).includes('STALLED_TURN_MIN'), 'tailFile must read file content');
 

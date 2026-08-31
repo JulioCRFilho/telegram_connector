@@ -32,7 +32,12 @@ const LOG_FILE = path.join(DIR, 'restart-schedule.log');
 const RESTART = path.join(DIR, 'restart-agent.sh');
 const INTERVAL_MS = 60 * 1000;          // liveness pass (dead pid → relaunch)
 const HEALTH_INTERVAL_MS = 10 * 60 * 1000; // deep health pass (stall detection)
-const STALLED_TURN_MIN = 30;            // turn in flight longer than this = stalled
+// A turn "in flight" this long is considered stalled. DELIBERATELY high: a
+// restart mid-task throws away ALL tokens the task already spent (the auto-
+// resume re-runs it from scratch in a fresh session), so killing a merely
+// LONG task re-burns its whole cost every cycle — the token treadmill. 90 min
+// still catches true hangs while leaving real long-running work alone.
+const STALLED_TURN_MIN = 90;
 const STALE_LOG_MIN = 10;               // no log line newer than this = hung
 const STALE_LOCK_MS = 60 * 1000;
 const RESTART_TIMEOUT_MS = 90 * 1000;   // graceful stop waits up to ~30s inside restart-agent.sh
