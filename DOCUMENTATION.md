@@ -291,7 +291,7 @@ What the user sees, per event:
 | Message during park | `⏳ … queued until ~HH:MM UTC` (persisted, retried automatically) |
 | Connection drop | `⚠️ The connection dropped — restarting now. Your work resumes automatically.` |
 
-Chat commands: `/keys` (cooldown grid), `/status` (instance, current combo, uptime, park window). Heartbeats ("still working") are log-only — the chat only hears about progress that actually happened.
+Chat commands: `/keys` (cooldown grid), `/status` (instance, current combo, uptime, park window), `/reset` (aliases `/resetkeys`, `/resetcooldowns`, `/resetgrid` — zeroes EVERY key×model cooldown record in memory and on disk, clears the model-limit marks, replies "♻️ Cleared N cooldown record(s)…", and if the wrapper was parked it wakes immediately and probes a fresh combo; a running connector keeps going and the cleared grid applies from its next rotation). Heartbeats ("still working") are log-only — the chat only hears about progress that actually happened.
 
 Telegram Bot API messaging + turn UX:
 
@@ -472,6 +472,12 @@ Regression test for the park refresh round: with every combo cooling, a fresh
 round over the persisted grid (a) stays parked when the grid is unchanged,
 (b) **exits the park and starts immediately** when a combo frees early, and
 (c) re-arms the wake timer when peers move the earliest unblock earlier.
+
+### `test.reset-command.js`
+Regression test for the `/reset` chat command: `resetAll()` zeroes the grid in
+memory AND on disk (returning the cleared count), a parked wrapper wakes and
+probes the top-priority combo, and the reply names the cleared count plus the
+full key×model matrix.
 
 ### `package.json`
 No dependencies. `npm test` runs all twelve test files; `npm run watch` starts
