@@ -93,6 +93,23 @@ const blockAll = (unblockAt) => {
 
   const line = `${pass} passed, ${fail} failed`;
   process.stdout.write(`\n${'.'.repeat(line.length)}\n${line}\n${'.'.repeat(line.length)}\n`);
+
+  // ── 4) the standalone CLI (reset-grid.js) works with NO agent ──────────────
+  // Run as a child process against the same temp files: it must zero the grid
+  // file and nudge the (registered, live) test process via SIGUSR2. The SIGUSR2
+  // handler registered by supervisor is what a real wrapper runs.
+  const { spawnSync } = require('child_process');
+  blockAll(Date.now() + 5 * 3600 * 1000);
+  cooldowns.save();
+  fs.writeFileSync(tmpPids, JSON.stringify({ RESETT: { pid: process.pid, instance: 'RESETT' } }));
+  const res = spawnSync(process.execPath, [path.join(__dirname, 'reset-grid.js')], { encoding: 'utf8' });
+  t(res.status === 0, `reset-grid.js exits 0 (got ${res.status})`);
+  t(/Cleared 4 cooldown record/.test(res.stdout), `CLI reports the cleared count (got: ${(res.stdout || '').trim().split('\n')[0]})`);
+  t(JSON.stringify(JSON.parse(fs.readFileSync(tmpCooldowns, 'utf8'))) === '{}', 'CLI zeroes the persisted grid file');
+  t(/nudged RESETT/.test(res.stdout), 'CLI nudges the live wrapper registered in agents.pids.json');
+  await new Promise((r) => setTimeout(r, 150));
+  t(m.blockedCombos.size === 0, 'SIGUSR2 nudge cleared the running wrapper in-memory grid too');
+
   fs.rmSync(tmpCooldowns, { force: true });
   fs.rmSync(tmpPids, { force: true });
   process.exit(fail ? 1 : 0);

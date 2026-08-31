@@ -473,11 +473,24 @@ round over the persisted grid (a) stays parked when the grid is unchanged,
 (b) **exits the park and starts immediately** when a combo frees early, and
 (c) re-arms the wake timer when peers move the earliest unblock earlier.
 
+### `reset-grid.js`
+The **agent-independent** reset CLI (`npm run reset`). Zeroes every key×model
+record in `agents.cooldowns.json` directly and SIGUSR2s every live wrapper (via
+`agents.pids.json`) so it re-evaluates the grid immediately — a parked wrapper
+wakes and starts a fresh combo. Touches no Telegram API and no cline process,
+so it works even when the agent is frozen — which is exactly when a reset is
+needed. The in-chat `/reset` runs the same `resetAndWake()` logic but requires
+a live, responsive connector; use `npm run reset` when in doubt. Wrappers also
+listen for `SIGUSR2` themselves and re-run `resetAndWake()` on receipt.
+
 ### `test.reset-command.js`
-Regression test for the `/reset` chat command: `resetAll()` zeroes the grid in
-memory AND on disk (returning the cleared count), a parked wrapper wakes and
-probes the top-priority combo, and the reply names the cleared count plus the
-full key×model matrix.
+17 tests for the reset machinery: `resetAll()` clears the grid in memory AND on
+disk (returning the cleared count), a second reset is a clean no-op, a parked
+wrapper wakes on `/reset` and probes the top-priority combo, and the reply
+names the cleared count plus the full key×model matrix. Also runs
+`reset-grid.js` as a child process against temp files: it must zero the grid
+file, nudge the registered live wrapper via SIGUSR2, and the nudged wrapper's
+in-memory grid must clear too.
 
 ### `package.json`
 No dependencies. `npm test` runs all twelve test files; `npm run watch` starts
