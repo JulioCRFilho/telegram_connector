@@ -19,7 +19,8 @@ const path = require('path');
 
 const m = require('./main.js');
 const lastmessage = require('./lib/lastmessage');
-const { genericResumePrompt } = require('./lib/resume');
+const { genericResumePrompt, _test: resumeTest } = require('./lib/resume');
+const resume = require('./lib/resume');
 
 let pass = 0, fail = 0;
 function t(cond, name) {
@@ -113,6 +114,17 @@ function t(cond, name) {
   const topicsPrompt = genericResumePrompt('sounded very performatic', [], topics);
   t(topicsPrompt.includes('Recent conversation topics') && topicsPrompt.includes('58fps'), 'resume prompt embeds the mined topics');
   t(!genericResumePrompt('x', [], []).includes('Recent conversation topics'), 'no topics → prompt unchanged');
+
+  // ── 7) short-cycle classification (the dropped-message bug) ───────────────
+  // A quoted cooldown of minutes ("Try again in 3m"/"16m") is a rolling quota
+  // window: it must be classified as short-cycle (park + auto-retry, never
+  // burning the give-up guard). Hour-scale daily limits are NOT short-cycle.
+  t(resumeTest.isShortCycleOf('resumed run failed: {"error":{"code":"INFERENCE_CAP_ERROR","message":"Error 429: Daily free limit reached on model z-ai/glm-5.3-flash. Try again in 16m"}}'), 'a quoted 16m cooldown is short-cycle (park + retry)');
+  t(resumeTest.isShortCycleOf('Error 429: Daily free limit reached on model z-ai/glm-5.3-flash. Try again in 3m'), 'a quoted 3m cooldown is short-cycle');
+  t(resumeTest.isShortCycleOf('Error 429: Daily free limit reached. Try again in 59m'), 'a quoted 59m cooldown is short-cycle (just under the 1h bound)');
+  t(!resumeTest.isShortCycleOf('Error 429: Daily free limit reached on model z-ai/glm-5.3-flash. Try again in 14h 8m'), 'a quoted 14h cooldown is NOT short-cycle (guard may drop it)');
+  t(!resumeTest.isShortCycleOf('Error 429: rate limit, no retry window quoted'), 'no quoted window → not short-cycle (falls to the default 15m guard path)');
+  t(resume.RESUME_MAX_PARK_RETRIES > resume.RESUME_MAX_PROVIDER_RETRIES, 'park-retry budget is looser than the instant-rotation guard');
 
   fs.rmSync(f, { force: true });
   fs.rmSync(tmpLog, { force: true });
