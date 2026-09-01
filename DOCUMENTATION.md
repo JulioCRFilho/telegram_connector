@@ -148,6 +148,24 @@ key, explicit `--model`, RPC port, allowed user, system prompt from
   wrapper retried a timing-out combo forever with no rotation.
 - `clearTimeoutStrikes()` — resets the timeout strike counter after a healthy
   turn (called from `logs.js` on "Telegram reply completed").
+- `onContextOverflow(line)` — a session that OUTGREW the model's context window
+  (poolside: "Input length 273636 exceeds the maximum allowed input length of
+  262112 tokens") is NOT a quota: the key and model are healthy, the connector's
+  accumulated thread is just longer than the window. This failure class is
+  matched by `config.CONTEXT_MAX_RE` BEFORE `LIMIT_RE` (whose generic
+  "inference request failed" substring would otherwise mis-block a perfectly
+  good combo for a rate-limit cooldown). The handler: queues the unanswered
+  message, sets `pendingResume` so the retry runs in a FRESH hub session
+  (`session.create` = zero accumulated context), restarts the connector on the
+  SAME combo (blocking no combo), and notifies the user. Deduped within 5 s
+  (the bridge double-logs failures); strikes reset on a completed reply. This
+  is why a long Flutter editing session on poolside stops "freezing" — the
+  message is delivered via a fresh session instead of dying on the oversized one.
+- `startIdleRecycle()` — PREVENTS sessions from ever reaching the context
+  window (`config.MAX_SESSION_MS`, default 45 m, env
+  `TELEGRAM_MAX_SESSION_MS`, 0 disables): when the connector has been up past
+  the limit AND has no active turn (never cutting mid-task), it is quietly
+  restarted on a fresh session. Wired into boot alongside the grid watcher.
 - `gridWatchTick()` / `startGridWatcher()` — every 30 s, rotates the live
   connector as soon as its CURRENT combo appears blocked in the (shared)
   cooldown grid, before any user message triggers the bridge's raw 429 error;
@@ -512,9 +530,19 @@ names the cleared count plus the full key×model matrix. Also runs
 file, nudge the registered live wrapper via SIGUSR2, and the nudged wrapper's
 in-memory grid must clear too.
 
+### `test.context-overflow.js`
+13 tests for the session-context-overflow path. Verifies classification ORDER
+against the exact poolside error (CONTEXT_MAX_RE must win over LIMIT_RE, and a
+plain 429 must still route to the quota path), that `onContextOverflow` blocks
+NO combo, queues the message, sets a fresh-session `pendingResume`, restarts on
+the SAME combo, dedupes the double-logged failure, and that the strike counter
+resets on a healthy turn. Set `TELEGRAM_MAX_SESSION_MS=0` to disable the idle
+recycle for the test run.
+
 ### `package.json`
-No dependencies. `npm test` runs all twelve test files; `npm run watch` starts
-the auto-heal watcher (`node watch-agents.js`).
+No dependencies. `npm test` runs all fourteen test files; `npm run reset` runs
+the standalone `reset-grid.js` cooldown reset; `npm run watch` starts the
+auto-heal watcher (`node watch-agents.js`).
 
 Run all with plain `node <file>` (no test framework).
 

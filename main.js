@@ -94,6 +94,7 @@ if (require.main === module) {
   log(`[Rotator] Stale connectors purged; starting in ${config.RESTART_DELAY_MS}ms...`);
   setInterval(logs.pollLogs, 1000);            // check cline's logs every second
   supervisor.startGridWatcher();               // rotate proactively when OUR combo gets blocked (e.g. by a peer instance)
+  supervisor.startIdleRecycle();              // restart idle connectors on a fresh session before context outgrows the model window
   // Boot also goes through startVerified: the chosen (key, model) is probed,
   // not trusted, exactly like every post-rotation restart. The choice itself is
   // a CONSULT of the cooldown grid — the first combo that is free (or, when
@@ -128,7 +129,10 @@ if (require.main !== module) {
     onProbeReject: supervisor.onProbeReject,
     onLimitSignal: supervisor.onLimitSignal,
     onTimeoutSignal: supervisor.onTimeoutSignal,
+    onContextOverflow: supervisor.onContextOverflow,
     clearTimeoutStrikes: supervisor.clearTimeoutStrikes,
+    clearContextOverflowStrikes: supervisor.clearContextOverflowStrikes,
+    startIdleRecycle: supervisor.startIdleRecycle,
     getTimeoutStrikes: supervisor._getTimeoutStrikes,
     gridWatchTick: supervisor.gridWatchTick,
     startGridWatcher: supervisor.startGridWatcher,
