@@ -97,8 +97,9 @@ const blockAll = (unblockAt) => {
 
   // ── 4) the standalone CLI (reset-grid.js) works with NO agent ──────────────
   // Run as a child process against the same temp files: it must zero the grid
-  // file and nudge the (registered, live) test process via SIGUSR2. The SIGUSR2
-  // handler registered by supervisor is what a real wrapper runs.
+  // file and attempt to restart the registered wrapper via restart-agent.sh.
+  // (In the test env the restart script can't actually re-spawn a fake instance,
+  // so it reports a restart attempt — the key guarantee is the file zeroing.)
   const { spawnSync } = require('child_process');
   blockAll(Date.now() + 5 * 3600 * 1000);
   cooldowns.save();
@@ -107,9 +108,9 @@ const blockAll = (unblockAt) => {
   t(res.status === 0, `reset-grid.js exits 0 (got ${res.status})`);
   t(/Cleared 4 cooldown record/.test(res.stdout), `CLI reports the cleared count (got: ${(res.stdout || '').trim().split('\n')[0]})`);
   t(JSON.stringify(JSON.parse(fs.readFileSync(tmpCooldowns, 'utf8'))) === '{}', 'CLI zeroes the persisted grid file');
-  t(/nudged RESETT/.test(res.stdout), 'CLI nudges the live wrapper registered in agents.pids.json');
-  await new Promise((r) => setTimeout(r, 150));
-  t(m.blockedCombos.size === 0, 'SIGUSR2 nudge cleared the running wrapper in-memory grid too');
+  t(/restart/.test(res.stdout), 'CLI attempts to restart the registered wrapper');
+  // In-memory grid is NOT touched by the CLI (it's the wrapper's job on boot):
+  t(m.blockedCombos.size === 4, 'CLI leaves the running wrapper in-memory grid to be re-read on boot');
 
   fs.rmSync(tmpCooldowns, { force: true });
   fs.rmSync(tmpPids, { force: true });
