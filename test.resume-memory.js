@@ -159,6 +159,42 @@ function t(cond, name) {
   t(lastmessage.count() === 1 && lastmessage.load().text === 'legacy task' && lastmessage.load().dossier[0] === 'old note', 'legacy single-record state file migrates into the FIFO');
   lastmessage.clear();
 
+  // ── 9) REGRESSION: "rec is not defined" crash path ─────────────────────────
+  // Message already in memory → the restore block (whose scope held the old
+  // `rec`) is skipped → the success path must still clear the FIFO entry via
+  // the captured resumedMessageText, and never throw.
+  {
+    const chat = require('./lib/chat');
+    const tasks = require('./lib/tasks');
+    const realSend = chat.sendTelegramMessage;
+    const realProgress = tasks.getTaskProgress;
+    const sent = [];
+    chat.sendTelegramMessage = async (id, text) => { sent.push(text); };
+    tasks.getTaskProgress = () => null;             // no task list: plain-conversation resume
+    resume._test.setWithHub(async (fn) => fn(async (command) => {
+      if (command === 'session.create') {
+        return { payload: { session: { sessionId: 'test-session-1' } } };
+      }
+      return {
+        payload: { result: { text: 'A sufficiently substantive resumed answer that clears the pending record.', finishReason: 'complete' } },
+      };
+    }));
+    const st = require('./lib/state');
+    st.lastUserMessage = 'sounded very performatic';   // already in memory: restore block SKIPPED
+    st.lastSeenChatId = 8844466799;
+    lastmessage.save(8844466799, 'sounded very performatic');
+    let threw = null;
+    try { await resume.resumeAfterRotation(8844466799); } catch (e) { threw = e; }
+    t(!threw, `resumeAfterRotation survives the memory-resident path (threw: ${threw ? threw.message : 'no'})`);
+    t(st.lastUserMessage === null, 'in-memory pending message is cleared after a substantive resume');
+    t(lastmessage.count() === 0, 'the FIFO entry for the ANSWERED message is removed (old code: ReferenceError "rec is not defined")');
+    t(sent.length >= 1, 'user still gets the resume outcome notice');
+    chat.sendTelegramMessage = realSend;
+    tasks.getTaskProgress = realProgress;
+    resume._test.setWithHub(null);                   // restore the real transport
+    // restore real withHub behavior: setWithHub(null) must fall back
+  }
+
   fs.rmSync(f, { force: true });
   fs.rmSync(tmpLog, { force: true });
   const line = `${pass} passed, ${fail} failed`;
