@@ -151,6 +151,44 @@ function restoreLog() { if (console.log !== origLog) console.log = origLog; }
   // The user's pending message must survive the whole thing.
   t(m.stateRef.lastUserMessage === 'the chest must rotate in any direction', 'pending message kept — never dropped by the rotation');
 
+  // ── Scenario 5: a SATURATED model stops the key-churn spam ────────────────
+  // History: when the whole model's daily quota is exhausted every key 429s in
+  // turn and the wrapper emitted the SAME "trying z-ai/glm-5.3-flash instead"
+  // notice once per key (observed 5× identical spam). Once SATURATED_KEYS
+  // (default 2) keys on a model are on cooldown, rotation MUST jump to the
+  // next model instead of handing back another key on the same one — and the
+  // notice names the other MODEL, not the same model again.
+  m.blockedCombos.clear();
+  require('fs').rmSync(tmpCooldowns, { force: true });
+  m._test.setCurrentCombo(0, 0);           // running key #0 / model #0
+  m._test.setRestarting(false);
+  m._test.setStartPending(false);
+  m._test.setLastProbeNoticeAt(0);
+  m._test.setLastLimitHandledAt(0);
+  m._test.setStartOverride((i, mi) => { /* no spawn */ });
+  m.blockedCombos.set('0:0', { unblockAt: Date.now() + 21 * 3600 * 1000, blockedAt: Date.now(), cooldownMs: 21 * 3600 * 1000, reason: 'limit signal', detail: '' });
+  m.blockedCombos.set('1:0', { unblockAt: Date.now() + 21 * 3600 * 1000, blockedAt: Date.now(), cooldownMs: 21 * 3600 * 1000, reason: 'limit signal', detail: '' });
+  outLines.length = 0;
+  // Third key on the same model gets a 429 too — with 2 keys already blocked
+  // the model is saturated, so rotation MUST leave it.
+  m.onLimitSignal('{"error":{"code":"INFERENCE_CAP_ERROR","message":"Error 429: Daily free limit reached on model z-ai/glm-5.3-flash. Try again in 21h 33m"}}');
+
+  const logS5 = outLines.join('\n');
+  const sat = m.saturatedModels(Date.now());
+  t(sat.has(0), 'model #0 reported saturated (2 of its keys on cooldown)');
+  t(!sat.has(1), 'model #1 is NOT saturated');
+  const s5rec = m.recommendCombo();
+  t(s5rec.key === 0 && s5rec.model === 1, `rotation jumped to model #1 (saturated model skipped), got key #${s5rec.key} / model #${s5rec.model}`);
+  t(!/trying another key on openrouter\/auto/.test(logS5), 'notice does NOT say "another key on the same model"');
+  t(/trying (deepseek\/deepseek-chat|openrouter\/auto) instead/.test(logS5), 'notice names the NEXT MODEL (a real model-hop), not the same model');
+  t((logS5.match(/hit its daily free limit/g) || []).length >= 1, 'user notice still fires once for the hop');
+
+  // Saturation is soft: as soon as ONE key on the model unblocks (< 2), the
+  // model becomes reachable again — independent-quota honoring, no permanent
+  // blacklist.
+  m.blockedCombos.get('1:0').unblockAt = Date.now() - 1;
+  t(!m.saturatedModels(Date.now()).has(0), 'model de-saturates once fewer than 2 keys are blocked');
+
   restoreLog();
   const line = `${passCount} passed, ${failCount} failed`;
   console.log(`\n${'.'.repeat(line.length)}\n${line}\n${'.'.repeat(line.length)}`);

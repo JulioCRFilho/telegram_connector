@@ -144,6 +144,7 @@ if (require.main !== module) {
     pickNextCombo: rotation.pickNextCombo,
     modelRank: rotation.modelRank,
     modelsByPriority: rotation.modelsByPriority,
+    saturatedModels: rotation.saturatedModels,
     isShortQuotedWindow: rotation.isShortQuotedWindow,
     isLongQuotedWindow: rotation.isLongQuotedWindow,
     gridStatus: rotation.gridStatus,
