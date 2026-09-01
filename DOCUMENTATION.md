@@ -89,7 +89,7 @@ is rotated once past 5 MB (a single `.1` backup) so it can't grow forever.
 ### `lib/supervisor.js`
 The rotator core — builds the `cline connect telegram` argv (bot token, API
 key, explicit `--model`, RPC port, allowed user, system prompt from
-`system_prompt.md`), spawns and monitors the connector:
+`AGENTS.md`), spawns and monitors the connector:
 
 - `buildArgs()` — argv construction; `--model` is always passed explicitly.
 - Launched-command echo **redacts secrets**: the bot token and every API key
@@ -460,14 +460,9 @@ holds a 60 s grace period (re-arming if a new message lands), hard-capped at
 
 ## Other root files
 
-### `system_prompt.md`
+### `AGENTS.md`
 The agent instructions injected into every connector via `--system`
 (read once at boot by `lib/supervisor.js`; shared by all instances).
-
-### `AGENTS.md`
-Working rules for the managing agent (keep bots EVOL/FSCENE online, rotate
-keys/models, confirm resets after changes, track PIDs, short answers/resumes).
-
 
 ---
 
