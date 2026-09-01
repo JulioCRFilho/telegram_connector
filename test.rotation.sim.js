@@ -117,13 +117,14 @@ function restoreLog() { if (console.log !== origLog) console.log = origLog; }
   m._cooldowns.load();                     // reload from the persisted file
   t(m.blockedCombos.has('0:0') && m.comboUnblockAt(0, 0) > Date.now(), 'persisted grid reloads after a wrapper restart (daily limit not forgotten)');
 
-  // ── Scenario 4: LONG daily-limit 429 is model/account-wide ───────────────
-  // The bug the user hit: "Try again in 21h 33m" on z-ai, then the wrapper
-  // rotated key #0 → #1 → #4 → #5 THROUGH THE SAME MODEL, each returning the
-  // same ~21h window, burning the retry-guard until the message was dropped.
-  // A long-window 429 must block the WHOLE model so rotation jumps to the
-  // NEXT model — and if every model is exhausted it parks with the message
-  // still queued (never drops: the user's real task must survive).
+  // ── Scenario 4: LONG daily-limit 429 blocks ONLY its own combo ─────────────
+  // History: the user first hit key-churn through an exhausted model, then the
+  // opposite bug — a "block the whole model" heuristic stamped IDENTICAL
+  // cooldowns on all 6 keys of the model from ONE key's 429, idling live
+  // quota for hours (all values equal per key in agents.cooldowns.json).
+  // Final rule: the keys have independent quotas — ALWAYS block exactly the
+  // (key, model) pair that got the 429; siblings stay live until they fail
+  // in turn. The pending message must survive regardless.
   m.blockedCombos.clear();
   require('fs').rmSync(tmpCooldowns, { force: true });
   m._test.setCurrentCombo(0, 0);           // running key #0 / model #0
@@ -137,14 +138,15 @@ function restoreLog() { if (console.log !== origLog) console.log = origLog; }
   m.onLimitSignal('resumed run failed: {"error":{"code":"INFERENCE_CAP_ERROR","message":"Error 429: Daily free limit reached on model z-ai/glm-5.3-flash. Try again in 21h 33m"}}');
 
   const logS4 = outLines.join('\n');
-  // Model-wide: BOTH keys of model 0 blocked by a single long-window 429.
-  t(m.blockedCombos.has('0:0') && m.blockedCombos.has('1:0'), 'a LONG 429 blocks BOTH sibling keys on the model (account-wide quota)');
-  t(/blocked ALL keys of the model/.test(logS4), 'log says the model was blocked as a whole');
-  t(m.comboUnblockAt(0, 0) > Date.now() + 21 * 3600 * 1000 - 120 * 1000, 'the ~21h quoted cooldown hit the grid');
+  // Strictly per-combo: exactly ONE record, the failing pair — nothing widened.
+  t(m.blockedCombos.size === 1 && m.blockedCombos.has('0:0'), 'a LONG 429 blocks ONLY the failing combo (0:0)');
+  t(!m.blockedCombos.has('1:0'), 'sibling key #1 on the model is NOT stamped with the same cooldown');
+  t(/Blocked key #0 \+ model #0/.test(logS4), 'log names exactly the blocked combo');
+  t(!/blocked ALL keys|model-wide/.test(logS4), 'no model-wide widening in the log');
+  t(m.comboUnblockAt(0, 0) > Date.now() + 21 * 3600 * 1000 - 120 * 1000, 'the ~21h quoted cooldown hit the blocked combo');
   const s4rec = m.recommendCombo();
-  t(s4rec.model === 1, `rotation jumps to the NEXT model (different provider), got model #${s4rec.model}`);
-  t(s4rec.key === 0, 'only one rotate target needed — no key-churn inside the exhausted model');
-  t(/trying deepseek\/deepseek-chat instead/.test(logS4), 'the notice names the NEXT MODEL (not a same-model key)');
+  t(s4rec.key === 1 && s4rec.model === 0, `rotation tries the sibling key on the SAME model next (independent quota), got key #${s4rec.key} / model #${s4rec.model}`);
+  t(/hit its daily free limit/.test(logS4), 'the user notice fires for the rotation');
 
   // The user's pending message must survive the whole thing.
   t(m.stateRef.lastUserMessage === 'the chest must rotate in any direction', 'pending message kept — never dropped by the rotation');

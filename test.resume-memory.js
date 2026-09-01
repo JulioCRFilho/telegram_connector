@@ -128,12 +128,14 @@ function t(cond, name) {
   t(resumeTest.isShortCycleOf('Error 429: Daily free limit reached on model z-ai/glm-5.3-flash. Try again in 3m'), 'a quoted 3m cooldown is short-cycle');
   t(resumeTest.isShortCycleOf('Error 429: Daily free limit reached. Try again in 59m'), 'a quoted 59m cooldown is short-cycle (just under the 1h bound)');
   t(resumeTest.isShortCycleOf('Error 429: rate limit, no retry window quoted'), 'an UNQUOTED rate limit defaults to short-cycle (15m park)');
-  t(rotation.isLongQuotedWindow(rotation.parseCooldownMs('Try again in 21h 33m')), 'a quoted 21h 33m window IS long (model-wide daily limit)');
-  t(rotation.isLongQuotedWindow(rotation.parseCooldownMs('Try again in 14h 8m')), 'a quoted 14h 8m window IS long (model-wide daily limit)');
+  t(rotation.isLongQuotedWindow(rotation.parseCooldownMs('Try again in 21h 33m')), 'a quoted 21h 33m window IS long (per-combo daily limit)');
+  t(rotation.isLongQuotedWindow(rotation.parseCooldownMs('Try again in 14h 8m')), 'a quoted 14h 8m window IS long (per-combo daily limit)');
   t(!rotation.isShortQuotedWindow(rotation.parseCooldownMs('Try again in 14h 8m')), 'a quoted 14h is NOT short');
-  t(!resumeTest.isShortCycleOf('Error 429: Daily free limit reached on model z-ai/glm-5.3-flash. Try again in 14h 8m'), 'a quoted 14h cooldown is NOT short-cycle (it is the long/model-wide path)');
-  const blAt = rotation.blockModel(0, rotation.parseCooldownMs('Try again in 21h 33m'), 'daily limit (model-wide)', 'test');
-  t(blAt > Date.now() && m.comboUnblockAt(0, 0) > Date.now() && m.blockedCombos.has('0:0'), 'blockModel blocks the model (all its key records) until the quoted time');
+  t(!resumeTest.isShortCycleOf('Error 429: Daily free limit reached on model z-ai/glm-5.3-flash. Try again in 14h 8m'), 'a quoted 14h cooldown is NOT short-cycle (long per-combo path)');
+  // Even a LONG daily window blocks exactly ONE combo — never the sibling keys.
+  const blAt = rotation.blockCombo(0, 0, rotation.parseCooldownMs('Try again in 21h 33m'), 'limit signal (resumed run)', 'test');
+  t(blAt > Date.now() && m.comboUnblockAt(0, 0) > Date.now() && m.blockedCombos.has('0:0'), 'long-window block lands on the failing combo');
+  t(!m.blockedCombos.has('1:0') && !m.blockedCombos.has('0:1'), 'sibling keys/models stay free — no model-wide widening');
 
   // ── 8) lossless FIFO — the "progress?" overwrite bug ──────────────────────
   // The chest task is pending when the user sends "progress?". The old single
